@@ -1,7 +1,7 @@
 # Pricing Tool
 
-Tracks the prices of our own shop products across marketplaces (currently Zalando and Otto),
-stores a daily price history in SQLite, and renders a self-contained HTML dashboard.
+Tracks the prices of shop.schiesser.com products across marketplaces, stores a
+daily price history in SQLite, and renders a self-contained HTML dashboard.
 Pure Python stdlib + the Firecrawl scrape API. No AI/LLM anywhere in the running
 pipeline — price extraction is deterministic (JSON-LD / meta tags).
 
@@ -11,54 +11,64 @@ See [PROJECT_PLAN.md](PROJECT_PLAN.md) for the full roadmap.
 
 ```
 products.csv + matches.csv          (catalog: what to track, where)
-        │  src/scrape.py            (Firecrawl fetch -> src/parse.py -> snapshot)
+        │  src/scrape.py            (own shop HTML, then Firecrawl -> src/parse.py)
         ▼
-pricing.db                          (SQLite: products, matches, snapshots)
+pricing.db                          (SQLite: products, shop_prices, matches, snapshots)
         │  src/dashboard.py
         ▼
-dashboard.html                      (self-contained: table + history charts)
+dashboard.html                      (self-contained card grid + history chart)
 ```
 
-- `products.csv` — one row per own product: `sku, ean, name, own_price_eur`
+- `products.csv` — one row per own product: `sku, ean, name, own_price_eur, shop_url, image_url`.
+  `own_price_eur` and `image_url` are the fallback until the shop page is read.
 - `matches.csv` — one row per (product × marketplace): `sku, marketplace, url`.
-  Matching is a one-time step per product; the daily run only scrapes stored URLs.
+  One URL per marketplace. The daily run only scrapes stored URLs.
+- Rows that leave the CSVs stay in the database with `active=0`. Their snapshots
+  are kept; the daily scrape stops requesting them.
+- Each run reads the own shop page first (no Firecrawl credit) and stores
+  `og:price:amount` and `og:image` in `products` and one `shop_prices` row per
+  calendar day. A failed shop fetch leaves the CSV price and image in place.
 - Extraction order per page: og/twitter price meta tags → JSON-LD product offers
   (meta wins on conflict because it carries the displayed sale price).
 
-### Marketplaces (verified 2026-09-01, 1 Firecrawl credit per page on the basic proxy)
+### Marketplaces (re-checked 2026-10-14)
 
-| Marketplace | Price source on the page | Notes |
+Direct fetches from this environment. "Parser works" means `src/parse.py` extracted
+a price from obtainable HTML. A blocked page was not given a guessed price.
+
+| Source | Parser | In this catalog |
 |---|---|---|
-| `zalando` | meta `twitter:data1` (label "Preis") | JSON-LD holds the list price, meta the displayed price |
-| `otto` | JSON-LD `Product.offers` (no price meta tags in the raw HTML) | Track the canonical product URL (no `variationId`); the page then shows the default variation, whose price can differ per size/colour. The JSON-LD also carries the variation's `gtin13` |
+| shop.schiesser.com | Works on a normal fetch. `og:price:amount` and `og:image`. All 11 shop pages returned the CSV price on 2026-10-14. | Every active product. |
+| `otto` | Historical Firecrawl runs extract JSON-LD. A direct product fetch is blocked (HTTP 400). The parser was not re-run on the new Otto URL. | `SCH-173983-803` keeps its existing URL (priced through 2026-10-08; the 2026-10-14 run failed with Firecrawl HTTP 402). `205221-000` adds `C1035381198`, matched by the Otto search title to the idealo offer title. |
+| `galeria` | JSON-LD works when the HTML is obtainable (historical extraction 37.95 on the tracked URL). Catalog search returns 403. | `SCH-173983-803` keeps its existing URL. No new Galeria URL for the other articles. |
+| `amazon` | Direct `/dp/` fetch returns 503. A reader proxy returns a block page. Parser not verified. | Five `/dp/` URLs whose slugs contain the article number: `205144-100` B012CR2JQ6, `205159-100` B01ATOOYEE, `205172-100` B00HQTQCK0, `183216-931` B0DPRB9FST (slug has 183216, not the colour `-931`), `183243-908` B0G34NXB6F (slug has 183243; pack size not confirmed on the page). |
+| `zalando` | Parser works (`twitter:data1` when the label is Preis/Price) when HTML is obtainable. Direct fetch is 403. Searches for the ten article numbers did not return those articles. | No new rows. The adidas demo matches are inactive. |
+| idealo | Direct fetch is 403. When HTML is available, JSON-LD is one aggregate price, not one price per shop. | Not stored as match URLs. The upload file's marketplace links are idealo pages. |
+| Kaufland, eBay, About You | No usable product HTML (verification wall, 403, or no article hit). | Not added. |
 
-Marketplaces evaluated and rejected for deterministic extraction: Amazon (buy-box
-price depends on size and third-party seller, no price meta/JSON-LD), About You
-(no price meta tags, public product API answers 403), Galeria (works via
-`og:price:amount`, but carries no adidas Stan Smith), Foot Locker / Snipes / JD
-Sports (adidas only, limited colourways).
+Otto candidates that were **not** added, because the manufacturer number was not on the page: C1375573893 and C2009241194 (possible `183243-908`), C1899923585 and C1899923512 (Original Classics, not confirmed as `205144-100` / `205172-100`), C1899925848 (title says 2er, slug says 4er), S005P0GN (possible `205145-100`), C1950221931 (href says 5er, title says 10er). No confirmed Otto or Amazon URL for `205222-803`, `205145-100`, `183989-214`, `183994-860`.
 
 ### Catalog notes
 
-- `SCH-173983-803` (Schiesser 95/5 Organic Cotton shorts, 3-pack, dark blue,
-  manufacturer no. 173983-803): own price 39.95 EUR taken from schiesser.com.
-  EANs are per size (e.g. 4007065791955, 4007065792037), so the `ean` column is
-  left empty. Otto match confirmed by the page's JSON-LD `gtin13` 4007065792037 (= 173983-803, size 7) and via idealo.
-  Zalando does **not** list the single-colour dark-blue 3-pack (only the
-  "95/5 ESSENTIALS" series and multi-colour "95/5 COTTON" packs), so there is no
-  Zalando row. **Galeria** is tracked as the second marketplace since 2026-09-03
-  (`https://www.galeria.de/produkt/schiesser-retro-short-pant-3er-pack-95-5-organic-cotton-4007065791955`,
-  exact EAN in the URL; first extraction 37.95 EUR).
-- The adidas Stan Smith demo rows have no second marketplace yet: none of Otto,
-  Galeria, About You, Foot Locker, Snipes or JD Sports lists the three Zalando
-  colourways (white/core black, white/green, white/crystal sky) with a
-  deterministic price. Amazon lists all three (FX5501, FX5502, B07XLNGL2V) but
-  only with per-size/seller prices.
+Eleven active products. Ten come from the 2026-10-14 Schiesser list. The eleventh
+is the article that was already being scraped.
+
+- `SCH-173983-803` stays, with its Otto and Galeria matches and every snapshot.
+  It is a different article from `183243-908`: both are "Enge Boxershorts 3er-Pack
+  Dunkelblau - 95/5" at 39.95 EUR, but the shop barcodes differ
+  (`4007065791955` is size 5 of 173983-803; `183243-908` starts at `4007067085311`).
+  The shop URL is `https://shop.schiesser.com/products/enge-boxershorts-3er-pack-dunkelblau-95-5-173983-803`.
+  The Otto slug still says "6er-pack"; the stored URL is unchanged because its
+  JSON-LD `gtin13` 4007065792037 is size 7 of this article.
+- `183243-908` is the new-list article and is not merged into `SCH-173983-803`.
+- The adidas Stan Smith rows (`DEMO-001`, `DEMO-002`, `DEMO-003`) are `active=0`.
+  Their Zalando snapshots stay in `pricing.db` and in the history export. They
+  are not on the dashboard and the daily run does not fetch them.
 
 ## Setup
 
 1. `cp .env.example .env` and add your Firecrawl API key.
-2. Edit `products.csv` and `matches.csv` (demo rows included).
+2. Edit `products.csv` and `matches.csv`.
 3. Manual run:
 
 ```bash
@@ -73,21 +83,20 @@ Live dashboard (GitHub Pages, republished by every daily run):
 **https://dynamicdolphino.github.io/price-radar/**
 
 `src/dashboard.py` writes a single self-contained `dashboard.html` (inline CSS +
-vanilla JS, no external assets, light and dark mode):
+vanilla JS, no external assets, light theme only):
 
-- **Overview table** — own price vs. the latest price per marketplace with the
-  delta in % (red = marketplace is cheaper) and the snapshot date. On phones each
-  row becomes a card.
-- **One chart per product** — every marketplace as its own line (fixed colour and
-  dash pattern per marketplace), the own price as a solid reference line with a
-  label chip, price labels on first/last/changed points, hover or touch for a
-  read-out of all series on a day, arrow keys when the chart is focused.
-- **Time range** — presets 1 week / 1 month / 3 / 6 / 12 months in one row above
-  the charts; the default is the smallest preset that covers all data and the
-  choice is remembered in the browser.
-- **Day counter** — per marketplace a strip with one cell per day of the selected
-  range and the counts "n Tage günstiger als du · n Tage teurer · n von N Tagen
-  erfasst".
+- **KPI row** — how many products a marketplace undercuts, the average gap of the
+  cheapest marketplace, the largest undercut, and products undercut on more than
+  seven consecutive observed days.
+- **Card grid** — shop photo, Mein Shop as the reference price, one row per
+  marketplace with the percent gap. Red means the marketplace is cheaper. A note
+  names the undercut. A price older than today shows its date.
+- **Toolbar** — marketplace and status chips, sort, time range, grid or list.
+  There is no search field.
+- **Detail panel** — price history of Mein Shop against the marketplaces (hover
+  and arrow keys), plus the last captured comparison.
+- **Export of the current view** — semicolon CSV with German decimals, an Excel
+  HTML file, and a print view ("Als PDF speichern").
 - German formats throughout (`dd.mm.yyyy`, `1.234,56 €`). UI language is German
   because that is the audience; code and docs stay English.
 

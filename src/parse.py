@@ -86,6 +86,38 @@ def from_jsonld(html):
     return None, None, None
 
 
+def _meta_map(html):
+    meta = {}
+    for tag in re.findall(r"<meta\b[^>]*>", html or "", re.I):
+        key = re.search(r"(?:property|name|itemprop)\s*=\s*[\"']([^\"']+)[\"']", tag, re.I)
+        val = re.search(r"content\s*=\s*[\"']([^\"']*)[\"']", tag, re.I)
+        if key and val:
+            meta[key.group(1)] = htmllib.unescape(val.group(1))
+    return meta
+
+
+def page_from_html(html):
+    """Build the {metadata, html} dict extract() expects, from a raw page."""
+    return {"metadata": _meta_map(html), "html": html or ""}
+
+
+def image_url(page):
+    """og:image (then twitter:image) from a fetched page, absolute https URL."""
+    meta = page.get("metadata") or {}
+    html = page.get("html") or ""
+    img = meta.get("og:image") or meta.get("twitter:image")
+    if not img:
+        img = _meta_map(html).get("og:image")
+    if not img:
+        return None
+    img = img.strip()
+    if img.startswith("//"):
+        img = "https:" + img
+    elif img.startswith("http://"):
+        img = "https://" + img[len("http://"):]
+    return img or None
+
+
 def extract(page):
     """page: {"metadata": {...}, "html": "..."} (either part may be missing).
     -> {"price", "currency", "available", "source"}
