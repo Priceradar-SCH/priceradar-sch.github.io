@@ -1,58 +1,53 @@
 """Generate a self-contained dashboard.html from the SQLite snapshots.
 
-Pure Python on the data side; the page carries a small inline JavaScript renderer
-(no external assets, no LLM) that draws one SVG price chart per product with every
-marketplace as its own series, the own price as the reference line, a time-range
-filter (1 week … 12 months), hover read-outs and a day counter (how many days each
-marketplace was cheaper / more expensive than the own price).
+The page is one HTML file (inline CSS and vanilla JS, no external assets).
+It renders the approved light-theme card grid: Mein Shop is the reference,
+each marketplace is a row with the gap in percent, and a product opens a
+panel with the price history. German UI and formats.
 
-Usage: python3 src/dashboard.py   -> writes dashboard.html in project root
+Usage: python3 src/dashboard.py   -> writes dashboard.html in the project root
 """
 import datetime
-import html
 import json
 import sys
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import db
 
 OUT = db.ROOT / "dashboard.html"
 
-# Categorical series slots (validated with the dataviz palette checker, light + dark).
-# Slot order is assigned to marketplaces alphabetically and never re-shuffled, so a
-# marketplace keeps its colour no matter which products it appears on.
-SERIES = [
-    ("#2a78d6", "#3987e5"),
-    ("#eb6834", "#d95926"),
-    ("#1baf7a", "#199e70"),
-    ("#eda100", "#c98500"),
-    ("#e87ba4", "#d55181"),
-    ("#008300", "#008300"),
-    ("#4a3aa7", "#9085e9"),
-    ("#e34948", "#e66767"),
-]
-
-LABELS = {"zalando": "Zalando", "otto": "Otto", "amazon": "Amazon",
-          "galeria": "Galeria", "aboutyou": "About You", "kaufland": "Kaufland",
-          "ebay": "eBay", "idealo": "idealo"}
+# Fixed per marketplace so a shop keeps its colour on every product.
+STYLE = {
+    "zalando": ("#ff6900", ""),
+    "otto": ("#d4002a", "6 4"),
+    "galeria": ("#2a6ad8", "2 3"),
+    "amazon": ("#e07a00", "8 3"),
+    "ebay": ("#0064d2", "2 2"),
+    "aboutyou": ("#111111", "10 4 2 4"),
+    "kaufland": ("#e10915", "4 3"),
+}
+ORDER = ["zalando", "otto", "galeria", "amazon", "ebay", "aboutyou", "kaufland"]
+LABELS = {
+    "zalando": "Zalando", "otto": "Otto", "galeria": "Galeria", "amazon": "Amazon",
+    "ebay": "eBay", "aboutyou": "About You", "kaufland": "Kaufland",
+}
 
 
 def label(marketplace):
-    return LABELS.get(marketplace.lower(), marketplace.capitalize())
+    return LABELS.get(marketplace, marketplace.capitalize())
 
 
-def de_date(iso):
-    """'2026-09-03' -> '03.09.2026'"""
-    y, m, d = iso[:10].split("-")
-    return f"{d}.{m}.{y}"
+def style_for(marketplace):
+    return STYLE.get(marketplace, ("#5c6570", "3 3"))
 
 
 def collect():
     conn = db.connect()
     marketplaces = [r["marketplace"] for r in conn.execute(
-        "SELECT DISTINCT marketplace FROM matches WHERE active=1 ORDER BY marketplace")]
-    slot = {mp: i % len(SERIES) for i, mp in enumerate(marketplaces)}
+        "SELECT DISTINCT marketplace FROM matches WHERE active=1")]
+    marketplaces.sort(key=lambda m: (ORDER.index(m) if m in ORDER else 99, m))
 
     history = {}
     for r in conn.execute("""
@@ -62,39 +57,64 @@ def collect():
         GROUP BY m.sku, m.marketplace, d ORDER BY d"""):
         history.setdefault((r["sku"], r["marketplace"]), []).append([r["d"], r["price"]])
 
-    # Most recent snapshot per match, successful or not — surfaces a broken extraction.
     last_run = {}
     for r in conn.execute("""
-        SELECT m.sku, m.marketplace, s.price, s.error, s.scraped_at FROM snapshots s
-        JOIN matches m ON m.id = s.match_id
-        WHERE s.id IN (SELECT MAX(id) FROM snapshots GROUP BY match_id)"""):
+        SELECT m.sku, m.marketplace, s.price, s.error, s.scraped_at
+        FROM snapshots s JOIN matches m ON m.id = s.match_id
+        WHERE m.active = 1 AND s.id IN (SELECT MAX(id) FROM snapshots GROUP BY match_id)"""):
         last_run[(r["sku"], r["marketplace"])] = r
 
+    urls = {(r["sku"], r["marketplace"]): r["url"] for r in conn.execute(
+        "SELECT sku, marketplace, url FROM matches WHERE active=1")}
+
+    shop_hist = {}
+    for r in conn.execute("""
+        SELECT sku, date(scraped_at) AS d, price FROM shop_prices
+        WHERE id IN (
+            SELECT MAX(id) FROM shop_prices GROUP BY sku, date(scraped_at)
+        ) ORDER BY d"""):
+        shop_hist.setdefault(r["sku"], []).append([r["d"], r["price"]])
+
     products = []
-    for p in conn.execute("SELECT * FROM products ORDER BY sku"):
+    for p in conn.execute("SELECT * FROM products WHERE active=1 ORDER BY name"):
         series = []
         for mp in marketplaces:
-            points = history.get((p["sku"], mp))
-            run = last_run.get((p["sku"], mp))
-            if not points and not run:
+            if (p["sku"], mp) not in urls:
                 continue
+            run = last_run.get((p["sku"], mp))
+            color, dash = style_for(mp)
             series.append({
                 "marketplace": mp,
                 "label": label(mp),
-                "slot": slot[mp],
-                "points": points or [],
+                "color": color,
+                "dash": dash,
+                "url": urls[(p["sku"], mp)],
+                "points": history.get((p["sku"], mp), []),
                 "lastError": (run["error"] if run and run["price"] is None else None),
                 "lastRun": run["scraped_at"][:10] if run else None,
             })
-        products.append({"sku": p["sku"], "name": p["name"],
-                         "own": p["own_price"], "series": series})
+        products.append({
+            "sku": p["sku"],
+            "ean": p["ean"],
+            "name": p["name"],
+            "own": p["own_price"],
+            "shopUrl": p["shop_url"],
+            "imageUrl": p["image_url"],
+            "shopPoints": shop_hist.get(p["sku"], []),
+            "series": series,
+        })
 
-    all_dates = [pt[0] for s in history.values() for pt in s]
+    dates = [pt[0] for s in history.values() for pt in s]
+    dates += [pt[0] for s in shop_hist.values() for pt in s]
+    now = datetime.datetime.now(ZoneInfo("Europe/Berlin"))
     return {
-        "generated": datetime.datetime.now().strftime("%d.%m.%Y %H:%M"),
-        "firstDate": min(all_dates) if all_dates else None,
-        "lastDate": max(all_dates) if all_dates else None,
-        "marketplaces": [{"key": mp, "label": label(mp), "slot": slot[mp]} for mp in marketplaces],
+        "generated": now.strftime("%d.%m.%Y, %H:%M"),
+        "firstDate": min(dates) if dates else None,
+        "lastDate": max(dates) if dates else None,
+        "marketplaces": [
+            {"key": mp, "label": label(mp), "color": style_for(mp)[0], "dash": style_for(mp)[1]}
+            for mp in marketplaces
+        ],
         "products": products,
     }
 
@@ -102,523 +122,652 @@ def collect():
 CSS = r"""
 :root {
   color-scheme: light;
-  --bg:#eef1f5; --card:#ffffff; --card-2:#f6f8fb; --line:#dfe4ea; --line-soft:#edf0f4;
-  --ink:#0f172a; --ink-2:#475569; --ink-3:#66748a;
-  --own:#0f172a; --own-chip:#0f172a; --own-chip-ink:#ffffff;
-  --good:#0ca30c; --good-bg:#e4f5e4; --bad:#d03b3b; --bad-bg:#fbe7e7;
-  --neutral-bg:#e6eaef; --focus:#2a78d6;
-  --s0:#2a78d6; --s1:#eb6834; --s2:#1baf7a; --s3:#eda100;
-  --s4:#e87ba4; --s5:#008300; --s6:#4a3aa7; --s7:#e34948;
+  --bg:#f7f7f8; --card:#fff; --fg:#0b0b0f; --mut:#5c6370; --line:#e7e7eb; --soft:#f1f1f4;
+  --acc:#5b5bf6; --accs:#ececfe; --red:#e5484d; --reds:#fdecec; --grn:#1f7a45; --grns:#e6f6ec;
+  --amb:#8a5a08; --ambs:#fdf3e1;
+  --sh:0 1px 2px rgba(16,16,24,.04), 0 8px 24px rgba(16,16,24,.06);
+  --z:#ff6900; --o:#d4002a; --g:#2a6ad8;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg:#0f1216; --card:#1a1e24; --card-2:#22272e; --line:#333a44; --line-soft:#272d35;
-    --ink:#f3f5f7; --ink-2:#b9c2ce; --ink-3:#7f8b99;
-    --own:#f3f5f7; --own-chip:#f3f5f7; --own-chip-ink:#0f1216;
-    --good:#3fbf3f; --good-bg:#173a17; --bad:#ef6b6b; --bad-bg:#4a1f1f;
-    --neutral-bg:#2b323b; --focus:#3987e5;
-    --s0:#3987e5; --s1:#d95926; --s2:#199e70; --s3:#c98500;
-    --s4:#d55181; --s5:#008300; --s6:#9085e9; --s7:#e66767;
-  }
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01"}
+.num{font-variant-numeric:tabular-nums}
+::selection{background:var(--accs);color:var(--fg)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px}
+header{display:flex;align-items:center;gap:14px;padding:20px 0 18px}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),#7c5cff);display:grid;place-items:center;color:#fff;flex:none}
+h1{font-size:17px;margin:0;letter-spacing:-.01em;font-weight:650}
+.sub{color:var(--mut);font-size:13px}
+.sp{flex:1}
+.stand{color:var(--mut);font-size:12.5px;display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 0 3px var(--grns)}
+.btn{height:34px;padding:0 12px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:9px;font:inherit;font-weight:550;font-size:13px;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.btn:hover{background:var(--soft)}
+.ic{width:34px;padding:0;justify-content:center}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--sh)}
+.kpi .l{color:var(--mut);font-size:12.5px}
+.kpi .v{font-size:26px;font-weight:650;letter-spacing:-.02em;margin-top:6px}
+.kpi .h{font-size:12px;color:var(--mut);margin-top:2px}
+.bar{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);padding:10px 0;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.seg button{border:0;background:none;color:var(--mut);font:inherit;font-size:12.5px;font-weight:550;padding:5px 9px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(16,16,24,.08)}
+select{height:34px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:9px;padding:0 10px;font:inherit;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding-bottom:28px}
+.grid.list{grid-template-columns:1fr}
+.card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--sh);cursor:pointer;display:flex;flex-direction:column;gap:10px;text-align:left;font:inherit;color:inherit;width:100%}
+@media (prefers-reduced-motion: no-preference){
+  .card{transition:transform .18s cubic-bezier(.2,.7,.2,1), border-color .18s}
+  .card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--acc) 40%,var(--line))}
 }
-* { box-sizing:border-box; }
-html { -webkit-text-size-adjust:100%; }
-body { margin:0; background:var(--bg); color:var(--ink);
-  font:15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-variant-numeric: tabular-nums; }
-a { color:inherit; }
-.wrap { max-width:1120px; margin:0 auto; padding:28px 20px 64px; }
-@media (max-width:640px) { .wrap { padding:18px 12px 48px; } }
-
-/* header */
-.head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px 24px; margin-bottom:22px; }
-.brand h1 { margin:0; font-size:30px; font-weight:800; letter-spacing:-0.03em; line-height:1.1; }
-.brand .tag { margin-top:6px; color:var(--ink-2); font-size:14px; }
-.brand .tag b { color:var(--ink); font-weight:600; }
-.meta { font-size:13px; color:var(--ink-3); text-align:right; }
-.meta a { color:var(--ink-2); text-decoration:none; border-bottom:1px solid var(--line); }
-.meta a:hover { color:var(--ink); border-color:var(--ink); }
-@media (max-width:640px) { .meta { text-align:left; } .brand h1 { font-size:26px; } }
-
-/* filter row */
-.filters { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:0 0 18px; }
-.filters .lbl { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); font-weight:600; }
-.seg { display:inline-flex; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:3px; gap:2px; }
-.seg button { appearance:none; border:0; background:transparent; color:var(--ink-2); font:inherit; font-size:13px; font-weight:600;
-  padding:6px 13px; border-radius:999px; cursor:pointer; min-height:34px; }
-.seg button:hover { color:var(--ink); background:var(--card-2); }
-.seg button[aria-pressed="true"] { background:var(--ink); color:var(--card); }
-.seg button:focus-visible { outline:2px solid var(--focus); outline-offset:1px; }
-.filters .hint { font-size:13px; color:var(--ink-3); }
-.seg .short { display:none; }
-@media (max-width:640px) { .seg { width:100%; } .seg button { flex:1; padding:6px 4px; font-size:12.5px; min-height:42px; } .seg .long { display:none; } .seg .short { display:inline; } }
-
-/* overview table */
-.card { background:var(--card); border:1px solid var(--line); border-radius:14px; }
-.overview { padding:0; overflow:hidden; margin-bottom:26px; }
-table { width:100%; border-collapse:collapse; }
-th, td { padding:12px 16px; text-align:right; border-bottom:1px solid var(--line-soft); vertical-align:top; }
-tr:last-child td { border-bottom:0; }
-th { font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); font-weight:600; background:var(--card-2); }
-th.name, td.name { text-align:left; }
-td.name .n { font-weight:600; }
-td.name .s { display:block; font-size:12px; color:var(--ink-3); }
-.price { font-size:17px; font-weight:700; letter-spacing:-0.01em; }
-.own-price { font-weight:800; }
-.chip { display:inline-block; font-size:12px; font-weight:700; padding:1px 8px; border-radius:999px; margin-top:4px; white-space:nowrap; }
-.chip.bad { color:var(--bad); background:var(--bad-bg); }
-.chip.good { color:var(--good); background:var(--good-bg); }
-.chip.eq { color:var(--ink-2); background:var(--neutral-bg); }
-.since { display:block; font-size:12px; color:var(--ink-3); margin-top:2px; }
-.warn { display:inline-block; font-size:12px; color:var(--bad); }
-.dot { display:inline-block; width:10px; height:10px; border-radius:50%; vertical-align:-1px; margin-right:6px; }
-@media (max-width:720px) {
-  .overview { background:transparent; border:0; }
-  table, tbody { display:block; }
-  thead { display:none; }
-  tr { display:grid; grid-template-columns:1fr 1fr; gap:0 10px; background:var(--card); border:1px solid var(--line);
-       border-radius:14px; padding:6px 14px; margin-bottom:10px; }
-  td { display:block; border:0; padding:8px 0; text-align:left; }
-  td.name { grid-column:1 / -1; border-bottom:1px solid var(--line-soft); }
-  td.na { display:none; }
-  td[data-h]::before { content:attr(data-h); display:block; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); font-weight:600; margin-bottom:2px; }
+.top{display:flex;gap:12px}
+.img{width:76px;height:76px;flex:none;border-radius:12px;background:#fff;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
+.img img{width:100%;height:100%;object-fit:contain}
+.nm{font-weight:620;font-size:13.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sku{color:var(--mut);font-size:11.5px;margin-top:2px}
+.url{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shop{background:var(--accs);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.shop .l{font-size:11.5px;font-weight:650;color:var(--acc);letter-spacing:.04em;text-transform:uppercase}
+.shop .v{font-size:22px;font-weight:680;letter-spacing:-.02em}
+.spark{width:46%;min-width:120px}
+.spark .cap{font-size:11px;color:var(--mut);text-align:right}
+.rows{display:flex;flex-direction:column;gap:4px}
+.row{display:grid;grid-template-columns:1fr auto 78px;gap:8px;align-items:center;font-size:12.5px;padding:3px 2px}
+.row .n{display:flex;align-items:center;gap:6px;min-width:0}
+.row i{width:7px;height:7px;border-radius:50%;flex:none}
+.row .at{color:var(--mut)}
+.pill{font-size:12px;font-weight:650;padding:2px 8px;border-radius:99px;text-align:center}
+.pill.r{color:var(--red);background:var(--reds)}
+.pill.g{color:var(--grn);background:var(--grns)}
+.pill.n{color:var(--mut);background:var(--soft)}
+.note{font-size:12px;font-weight:550;padding:7px 10px;border-radius:9px;display:flex;gap:6px;align-items:flex-start}
+.note svg{flex:none;margin-top:2px}
+.note.r{background:var(--reds);color:#9f1239}
+.note.g{background:var(--grns);color:#166534}
+.note.n{background:var(--soft);color:var(--mut)}
+.note.a{background:var(--ambs);color:var(--amb)}
+.empty{grid-column:1/-1;text-align:center;color:var(--mut);padding:60px 16px}
+.foot{padding:0 0 36px;font-size:12px;color:var(--mut);line-height:1.5}
+.ov{position:fixed;inset:0;background:rgba(8,8,14,.45);display:none;z-index:20;justify-content:flex-end}
+.ov.open{display:flex}
+.panel{width:min(880px,100%);height:100%;overflow:auto;background:var(--bg);border-left:1px solid var(--line);padding:24px 28px;box-shadow:-20px 0 60px rgba(0,0,0,.18)}
+.ph{display:flex;gap:16px;align-items:flex-start}
+.ph .img{width:96px;height:96px}
+.ph h2{margin:0;font-size:19px;letter-spacing:-.01em;font-weight:650}
+.ids{color:var(--mut);font-size:12px;margin:4px 0 10px}
+.links{display:flex;gap:8px;flex-wrap:wrap}
+.links a{font-size:12.5px;color:var(--acc);text-decoration:none;border:1px solid var(--line);background:var(--card);padding:5px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px}
+.links a svg{flex:none}
+.links a:hover{background:var(--accs)}
+.links a.me{background:var(--accs)}
+.badge{font-size:11.5px;font-weight:650;padding:3px 8px;border-radius:6px;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+.badge:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.b-g{color:var(--red);background:var(--reds)}
+.b-t{color:var(--grn);background:var(--grns)}
+.b-e{color:var(--mut);background:var(--soft)}
+.b-x{color:var(--amb);background:var(--ambs)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:16px;box-shadow:var(--sh)}
+.bh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.bh b{font-size:13.5px}
+.leg{display:flex;gap:14px;font-size:12px;color:var(--mut);flex-wrap:wrap;margin-bottom:6px}
+.leg span{display:inline-flex;align-items:center;gap:6px}
+#chart{position:relative}
+#chart svg{width:100%;height:auto;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 8px 24px rgba(16,16,24,.12);display:none;min-width:168px}
+.tip div{display:flex;justify-content:space-between;gap:14px}
+.cmp{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cmp>div{background:var(--soft);border-radius:12px;padding:10px 12px}
+.cmp .h{font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center}
+.cmp .h i{width:7px;height:7px;border-radius:50%}
+.cmp .v{font-size:18px;font-weight:650;margin-top:2px}
+.cmp>div.me{background:var(--accs)}
+.cmp .at{font-size:12px;color:var(--mut)}
+.dd{position:relative}
+.menu{position:absolute;right:0;top:40px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(16,16,24,.12);padding:6px;min-width:250px;display:none;z-index:30}
+.menu.open{display:block}
+.menu button,.menu a{display:flex;width:100%;gap:10px;align-items:center;border:0;background:none;color:var(--fg);font:inherit;font-size:13px;padding:8px 10px;border-radius:8px;cursor:pointer;text-align:left;text-decoration:none}
+.menu button:hover,.menu a:hover{background:var(--soft)}
+.menu small{display:block;color:var(--mut);font-size:11.5px}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px}
+.mi{width:16px;flex:none;color:var(--mut)}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:600px){
+  .wrap{padding:0 14px}
+  header{flex-wrap:wrap;gap:10px}
+  header .sp{display:none}
+  .stand{order:5;width:100%}
+  .hide-m{display:none}
+  .kpi .v{font-size:22px}
+  .kpi{padding:12px 14px}
+  .kpis{gap:10px}
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .bar{gap:8px;overflow-x:auto;flex-wrap:nowrap;margin:0 -14px;padding:10px 14px}
+  .panel{padding:18px}
+  .cmp{grid-template-columns:repeat(2,1fr)}
 }
-
-/* product cards */
-.product { padding:18px 20px 16px; margin-bottom:18px; }
-@media (max-width:640px) { .product { padding:14px 12px 12px; border-radius:12px; } }
-.product-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:6px 16px; margin-bottom:12px; }
-.product-head h2 { margin:0; font-size:17px; font-weight:700; letter-spacing:-0.01em; }
-.product-head .sku { font-size:12px; color:var(--ink-3); }
-.legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin:0 0 10px; font-size:13.5px; }
-.legend .it { display:inline-flex; align-items:center; gap:7px; }
-.legend .key { width:18px; height:0; border-top:3px solid; border-radius:2px; }
-.legend .key.own { border-top-style:solid; border-color:var(--own); }
-.legend .v { font-weight:700; }
-.legend .name { color:var(--ink-2); }
-.chart-wrap { position:relative; }
-.chart { display:block; width:100%; height:auto; overflow:visible; touch-action:pan-y; }
-.chart text { font-family:inherit; }
-.grid line { stroke:var(--line-soft); stroke-width:1; }
-.axis text { fill:var(--ink-3); font-size:11.5px; }
-.axis line { stroke:var(--line); }
-.series path { fill:none; stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round; }
-.series circle { stroke:var(--card); stroke-width:2; }
-.own-line { stroke:var(--own); stroke-width:2; }
-.own-chip rect { fill:var(--own-chip); }
-.own-chip text { fill:var(--own-chip-ink); font-size:11.5px; font-weight:700; }
-.plabel { font-size:11.5px; font-weight:700; fill:var(--ink); paint-order:stroke; stroke:var(--card); stroke-width:4px; stroke-linejoin:round; }
-.plabel.dim { fill:var(--ink-2); font-weight:600; }
-.xhair { stroke:var(--ink-3); stroke-width:1; stroke-dasharray:3 3; pointer-events:none; }
-.hit { fill:transparent; outline:none; }
-.chart:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
-.tip { position:absolute; z-index:5; pointer-events:none; background:var(--card); color:var(--ink); border:1px solid var(--line);
-  border-radius:10px; padding:8px 11px; font-size:13px; box-shadow:0 8px 24px rgba(15,23,42,.12); min-width:150px; display:none; }
-.tip .d { font-size:11.5px; color:var(--ink-3); margin-bottom:5px; font-weight:600; letter-spacing:.02em; }
-.tip .r { display:flex; align-items:center; gap:8px; white-space:nowrap; line-height:1.7; }
-.tip .k { width:14px; border-top:3px solid; border-radius:2px; }
-.tip .k.own { border-color:var(--own); }
-.tip .v { font-weight:700; }
-.tip .n { color:var(--ink-2); }
-.tip .dl { margin-left:auto; font-size:12px; font-weight:700; padding-left:8px; }
-.tip .dl.bad { color:var(--bad); } .tip .dl.good { color:var(--good); } .tip .dl.eq { color:var(--ink-3); }
-.empty { padding:26px 0; color:var(--ink-3); text-align:center; font-size:14px; }
-
-/* day counter */
-.days { margin-top:14px; border-top:1px solid var(--line-soft); padding-top:12px; }
-.days .t { font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); font-weight:600; margin-bottom:8px; }
-.dayrow { display:grid; grid-template-columns:minmax(72px, 130px) 1fr; gap:6px 14px; align-items:center; margin-bottom:8px; }
-.dayrow .who { font-size:13px; font-weight:600; display:flex; align-items:center; }
-.dayrow .strip { display:flex; gap:1px; height:14px; border-radius:4px; overflow:hidden; background:var(--line-soft); }
-.dayrow .strip i { flex:1 1 0; min-width:1px; background:var(--neutral-bg); }
-.dayrow .strip i.bad { background:var(--bad); } .dayrow .strip i.good { background:var(--good); }
-.dayrow .strip i.eq { background:var(--ink-3); } .dayrow .strip i.none { background:transparent; }
-.dayrow .sum { grid-column:2; font-size:13px; color:var(--ink-2); display:flex; flex-wrap:wrap; gap:4px 14px; }
-.dayrow .sum b { font-weight:700; color:var(--ink); }
-.dayrow .sum .bad b { color:var(--bad); } .dayrow .sum .good b { color:var(--good); }
-@media (max-width:640px) { .dayrow { grid-template-columns:1fr; } .dayrow .sum { grid-column:1; } }
-
-.foot { margin-top:26px; font-size:12.5px; color:var(--ink-3); line-height:1.6; }
-@media (prefers-reduced-motion: no-preference) { .seg button, .chip { transition:background .15s, color .15s; } }
+@media print{
+  body{background:#fff}
+  .bar,.dd,.ov,.foot{display:none!important}
+  .card{break-inside:avoid;box-shadow:none}
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .wrap{max-width:none;padding:0}
+}
 """
 
 JS = r"""
-(function(){
+(function () {
   var DATA = window.__PRICE_DATA__;
-  var RANGES = [
-    {key:'1w',  label:'1 Woche',   short:'1 W',  days:7},
-    {key:'1m',  label:'1 Monat',   short:'1 M',  days:30},
-    {key:'3m',  label:'3 Monate',  short:'3 M',  days:91},
-    {key:'6m',  label:'6 Monate',  short:'6 M',  days:182},
-    {key:'12m', label:'12 Monate', short:'12 M', days:365}
-  ];
-  var MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
-  var eur = new Intl.NumberFormat('de-DE', {style:'currency', currency:'EUR'});
-  var fmt = function(v){ return eur.format(v); };
-  var pct = function(v){ return (v > 0 ? '+' : '') + v.toFixed(1).replace('.', ',') + ' %'; };
+  var ICO = {
+    chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    grid: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5"/><rect x="13.5" y="4" width="6.5" height="6.5"/><rect x="4" y="13.5" width="6.5" height="6.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5"/></svg>',
+    list: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11M4 7h.01M4 12h.01M4 17h.01"/></svg>',
+    ext: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9"/><path d="M10 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></svg>'
+  };
+  var RANGES = { "1W": 7, "1M": 30, "3M": 90, "6M": 180, "12M": 365 };
+  var S = { m: "Alle", s: "Alle", sort: "dev", r: 30, view: "grid" };
+  var DR = 90;
+  var openSku = null;
+  var eur = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function fmt(n) { return n == null ? "–" : eur.format(n) + " \u20ac"; }
+  function pct(n) {
+    var sign = n > 0.05 ? "+" : n < -0.05 ? "\u2212" : "\u00b1";
+    return sign + Math.abs(n).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
+  }
+  function parse(iso) { var p = iso.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function dmy(t) { var d = new Date(t); return pad(d.getUTCDate()) + "." + pad(d.getUTCMonth() + 1) + "." + d.getUTCFullYear(); }
+  function dm(t) { var d = new Date(t); return pad(d.getUTCDate()) + "." + pad(d.getUTCMonth() + 1) + "."; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
   var DAY = 86400000;
-
-  function parse(iso){ var p = iso.split('-'); return Date.UTC(+p[0], +p[1]-1, +p[2]); }
-  function dmy(t){ var d = new Date(t); return pad(d.getUTCDate()) + '.' + pad(d.getUTCMonth()+1) + '.' + d.getUTCFullYear(); }
-  function dm(t){ var d = new Date(t); return pad(d.getUTCDate()) + '.' + pad(d.getUTCMonth()+1) + '.'; }
-  function my(t){ var d = new Date(t); return MONTHS[d.getUTCMonth()] + ' ' + String(d.getUTCFullYear()).slice(2); }
-  function pad(n){ return (n < 10 ? '0' : '') + n; }
-  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  function svgEl(tag, attrs){ var e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
-  function keyStyle(slot){ var d = seriesDash(slot); return !d ? 'solid' : (d.indexOf('2 ') === 0 ? 'dotted' : 'dashed'); }
-  function cmp(price, own){ if (own == null) return 'eq'; var d = price - own; return d < -0.005 ? 'bad' : (d > 0.005 ? 'good' : 'eq'); }
-  function seriesColor(slot){ return 'var(--s' + slot + ')'; }
-  var DASH = ['', '7 5', '2 4', '10 4 2 4', '4 4', '12 4', '2 2', '8 3 2 3'];
-  function seriesDash(slot){ return DASH[slot % DASH.length]; }
-
-  // ---- state -------------------------------------------------------------
-  var today = (function(){ var d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); })();
+  var today = (function () { var d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); })();
   var lastData = DATA.lastDate ? parse(DATA.lastDate) : today;
   var endDay = Math.max(today, lastData);
-  var firstData = DATA.firstDate ? parse(DATA.firstDate) : endDay;
-  var spanDays = Math.round((endDay - firstData) / DAY) + 1;
-  var autoKey = (RANGES.filter(function(r){ return r.days >= spanDays; })[0] || RANGES[RANGES.length-1]).key;
-  var rangeKey = autoKey;
-  try { var saved = localStorage.getItem('preisradar.range'); if (saved && RANGES.some(function(r){ return r.key === saved; })) rangeKey = saved; } catch (e) {}
-  function range(){ return RANGES.filter(function(r){ return r.key === rangeKey; })[0]; }
-  function startDay(){ return endDay - (range().days - 1) * DAY; }
 
-  // ---- filter row --------------------------------------------------------
-  var seg = document.getElementById('range');
-  RANGES.forEach(function(r){
-    var b = el('button'); b.type = 'button'; b.dataset.key = r.key; b.setAttribute('aria-label', r.label);
-    b.appendChild(el('span', 'long', r.label)); b.appendChild(el('span', 'short', r.short));
-    b.addEventListener('click', function(){ rangeKey = r.key; try { localStorage.setItem('preisradar.range', r.key); } catch (e) {} renderAll(); });
-    seg.appendChild(b);
-  });
-  function syncFilter(){
-    var s = startDay();
-    seg.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.key === rangeKey ? 'true' : 'false'); });
-    document.getElementById('range-hint').textContent = dmy(s) + ' – ' + dmy(endDay);
-  }
-
-  // ---- charts ------------------------------------------------------------
-  function ticksFor(start, end, width){
-    var days = Math.round((end - start) / DAY) + 1;
-    var target = Math.max(3, Math.floor(width / 96));
-    var step = days / target;
-    var out = [];
-    step = [1, 2, 3, 5, 7, 14, 21].filter(function(c){ return c >= step; })[0] || 0;
-    if (step) {
-      var t = end;
-      while (t >= start) { out.unshift({t:t, label: dm(t)}); t -= step * DAY; }
-    } else {
-      var d = new Date(end); var y = d.getUTCFullYear(), m = d.getUTCMonth();
-      var monthStep = days > 200 ? 2 : 1;
-      for (var i = 0; i < 24; i++) { var t2 = Date.UTC(y, m - i * monthStep, 1); if (t2 < start) break; out.unshift({t:t2, label: my(t2)}); }
-    }
-    return out;
-  }
-  function niceStep(span, count){
-    var raw = span / count, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / mag;
-    var s = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
-    return s * mag;
-  }
-
-  function drawChart(p, wrap){
-    wrap.innerHTML = '';
-    var start = startDay(), end = endDay;
-    var series = p.series.map(function(s){
-      return {s:s, pts: s.points.map(function(q){ return {t: parse(q[0]), v: q[1]}; }).filter(function(q){ return q.t >= start && q.t <= end; })};
+  function latest(s) { return s.points.length ? s.points[s.points.length - 1] : null; }
+  function bestOf(p) {
+    var best = null;
+    p.series.forEach(function (s) {
+      var pt = latest(s);
+      if (!pt) return;
+      if (!best || pt[1] < best.price) best = { series: s, price: pt[1], date: pt[0] };
     });
-    var visible = series.filter(function(ser){ return ser.pts.length; });
-    if (!visible.length) { wrap.appendChild(el('div', 'empty', 'Keine Preisdaten im gewählten Zeitraum.')); return; }
+    return best;
+  }
+  function devOf(p) {
+    var b = bestOf(p);
+    if (!b || !p.own) return null;
+    return (b.price - p.own) / p.own * 100;
+  }
+  function statusOf(p) {
+    var tracked = p.series.length;
+    var priced = p.series.filter(function (s) { return latest(s); });
+    var failed = p.series.filter(function (s) { return s.lastError && !latest(s); });
+    if (!tracked) return "Ohne Link";
+    if (!priced.length && failed.length) return "Scrape-Fehler";
+    if (!priced.length) return "Nicht verfügbar";
+    var d = devOf(p);
+    if (d < -0.05) return "Günstiger";
+    if (d > 0.05) return "Teurer";
+    return "Gleich";
+  }
+  var BADGE = { "Günstiger": "b-g", "Teurer": "b-t", "Gleich": "b-e", "Nicht verfügbar": "b-e", "Scrape-Fehler": "b-x", "Ohne Link": "b-e" };
 
-    var W = Math.max(280, wrap.clientWidth), narrow = W < 520;
-    var H = narrow ? 230 : 300;
-    var padL = 8, padR = 10, padT = 24, padB = 30;
-    var pw = W - padL - padR, ph = H - padT - padB;
-    var vals = [];
-    visible.forEach(function(ser){ ser.pts.forEach(function(q){ vals.push(q.v); }); });
-    if (p.own != null) vals.push(p.own);
-    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    if (hi - lo < 1) { lo -= 2; hi += 2; }
-    var padV = (hi - lo) * 0.18; lo -= padV; hi += padV;
-    var yStep = niceStep(hi - lo, narrow ? 3 : 4);
-    lo = Math.floor(lo / yStep) * yStep; hi = Math.ceil(hi / yStep) * yStep;
-    var sx = function(t){ return padL + (t - start) / (end - start || DAY) * pw; };
-    var sy = function(v){ return padT + (hi - v) / (hi - lo) * ph; };
-
-    var svg = svgEl('svg', {class:'chart', viewBox:'0 0 ' + W + ' ' + H, width:W, height:H, role:'img'});
-    svg.setAttribute('aria-label', 'Preisverlauf ' + p.name + ' – Pfeiltasten zeigen Tageswerte');
-    svg.setAttribute('tabindex', '0');
-    var grid = svgEl('g', {class:'grid'}), axis = svgEl('g', {class:'axis'});
-    for (var v = lo; v <= hi + 1e-9; v += yStep) {
-      grid.appendChild(svgEl('line', {x1:padL, x2:padL + pw, y1:sy(v), y2:sy(v)}));
-      var ty = svgEl('text', {x:padL + 2, y:sy(v) - 5}); ty.textContent = fmt(v); axis.appendChild(ty);
-    }
-    ticksFor(start, end, pw).forEach(function(tk){
-      var tx = svgEl('text', {x:sx(tk.t), y:H - 8, 'text-anchor':'middle'}); tx.textContent = tk.label; axis.appendChild(tx);
-      axis.appendChild(svgEl('line', {x1:sx(tk.t), x2:sx(tk.t), y1:padT + ph, y2:padT + ph + 4}));
-    });
-    svg.appendChild(grid); svg.appendChild(axis);
-
-    // own price: the reference everything is measured against
-    var oy = null, chipW = 0;
-    if (p.own != null) {
-      oy = sy(p.own);
-      svg.appendChild(svgEl('line', {class:'own-line', x1:padL, x2:padL + pw, y1:oy, y2:oy}));
-      var chip = svgEl('g', {class:'own-chip'});
-      var txt = 'Eigener Preis ' + fmt(p.own);
-      var cw = txt.length * 6.6 + 16; chipW = cw;
-      chip.appendChild(svgEl('rect', {x:padL + pw - cw, y:oy - 11, width:cw, height:22, rx:11}));
-      var ct = svgEl('text', {x:padL + pw - cw / 2, y:oy + 4, 'text-anchor':'middle'}); ct.textContent = txt; chip.appendChild(ct);
-      svg.appendChild(chip);
-    }
-
-    // series lines + points + selective labels
-    var labels = [];
-    visible.forEach(function(ser){
-      var g = svgEl('g', {class:'series'}), col = seriesColor(ser.s.slot);
-      var d = ser.pts.map(function(q, i){ return (i ? 'L' : 'M') + sx(q.t).toFixed(1) + ' ' + sy(q.v).toFixed(1); }).join(' ');
-      if (ser.pts.length > 1) g.appendChild(svgEl('path', {d:d, stroke:col, 'stroke-dasharray': seriesDash(ser.s.slot)}));
-      ser.pts.forEach(function(q, i){
-        g.appendChild(svgEl('circle', {cx:sx(q.t), cy:sy(q.v), r:4, fill:col}));
-        var changed = i === 0 || i === ser.pts.length - 1 || Math.abs(q.v - ser.pts[i-1].v) > 0.005;
-        if (changed) labels.push({x:sx(q.t), y:sy(q.v), v:q.v, last:i === ser.pts.length - 1, own:p.own});
+  function cheaperList(p) {
+    return p.series.filter(function (s) {
+      var pt = latest(s);
+      return pt && p.own && pt[1] < p.own - 0.005;
+    }).sort(function (a, b) { return latest(a)[1] - latest(b)[1]; });
+  }
+  function weekChange(p) {
+    var b = bestOf(p);
+    if (!b) return 0;
+    var start = endDay - 7 * DAY;
+    var prev = null;
+    b.series.points.forEach(function (pt) { if (parse(pt[0]) <= start) prev = pt[1]; });
+    if (prev == null) return 0;
+    return (b.price - prev) / prev * 100;
+  }
+  function expensiveLong(p) {
+    if (!p.own) return false;
+    var by = {};
+    p.series.forEach(function (s) {
+      s.points.forEach(function (pt) {
+        if (by[pt[0]] == null || pt[1] < by[pt[0]]) by[pt[0]] = pt[1];
       });
-      svg.appendChild(g);
     });
-    // thin labels when they crowd: keep first/last + the biggest jumps
-    var maxLabels = Math.max(4, Math.floor(pw / 64));
-    if (labels.length > maxLabels) {
-      labels.sort(function(a, b){ return b.last - a.last; });
-      labels = labels.slice(0, maxLabels);
+    var days = Object.keys(by).sort();
+    if (!days.length) return false;
+    var end = parse(days[days.length - 1]);
+    var streak = 0;
+    for (var i = 0; i < 400; i++) {
+      var iso = new Date(end - i * DAY).toISOString().slice(0, 10);
+      if (by[iso] == null || !(by[iso] < p.own - 0.005)) break;
+      streak++;
     }
-    labels.sort(function(a, b){ return a.x - b.x; });
-    var lastX = -1e9, above = true;
-    labels.forEach(function(l){
-      if (l.x - lastX < 46) above = !above; else above = true;
-      if (above && l.y - padT < 18) above = false;
-      if (!above && padT + ph - l.y < 18) above = true;
-      // keep clear of the own-price chip at the right end
-      if (oy != null && l.x > padL + pw - chipW - 24 && Math.abs(l.y - oy) < 30) above = l.y < oy;
-      lastX = l.x;
-      var t = svgEl('text', {class:'plabel' + (l.last ? '' : ' dim'), x:l.x, y: above ? l.y - 10 : l.y + 19, 'text-anchor': l.x > padL + pw - 34 ? 'end' : (l.x < padL + 34 ? 'start' : 'middle')});
-      t.textContent = fmt(l.v); svg.appendChild(t);
-    });
-
-    // hover: crosshair + one read-out for every series at that day
-    var dates = {}; visible.forEach(function(ser){ ser.pts.forEach(function(q){ dates[q.t] = 1; }); });
-    var dayList = Object.keys(dates).map(Number).sort(function(a, b){ return a - b; });
-    var xhair = svgEl('line', {class:'xhair', y1:padT, y2:padT + ph, x1:-10, x2:-10, visibility:'hidden'});
-    svg.appendChild(xhair);
-    var hit = svgEl('rect', {class:'hit', x:padL, y:0, width:pw, height:H});
-    svg.appendChild(hit);
-    var tip = el('div', 'tip');
-    wrap.appendChild(svg); wrap.appendChild(tip);
-
-    var current = null;
-    function show(evt){
-      var r = svg.getBoundingClientRect();
-      var px = (evt.clientX - r.left) * (W / r.width);
-      var t = start + (px - padL) / pw * (end - start || DAY);
-      var best = dayList[0]; dayList.forEach(function(d){ if (Math.abs(d - t) < Math.abs(best - t)) best = d; });
-      showDay(best, r);
-    }
-    function showDay(best, r){
-      if (best == null) return;
-      current = best; r = r || svg.getBoundingClientRect();
-      xhair.setAttribute('x1', sx(best)); xhair.setAttribute('x2', sx(best)); xhair.setAttribute('visibility', 'visible');
-      tip.innerHTML = ''; tip.appendChild(el('div', 'd', dmy(best)));
-      visible.forEach(function(xs){
-        var q = xs.pts.filter(function(q){ return q.t === best; })[0]; if (!q) return;
-        var row = el('div', 'r'); var k = el('span', 'k'); k.style.borderColor = seriesColor(xs.s.slot); k.style.borderTopStyle = keyStyle(xs.s.slot);
-        row.appendChild(k); row.appendChild(el('span', 'v', fmt(q.v))); row.appendChild(el('span', 'n', xs.s.label));
-        if (p.own) { var c = cmp(q.v, p.own); row.appendChild(el('span', 'dl ' + c, pct((q.v - p.own) / p.own * 100))); }
-        tip.appendChild(row);
-      });
-      if (p.own != null) { var ro = el('div', 'r'); ro.appendChild(el('span', 'k own')); ro.appendChild(el('span', 'v', fmt(p.own))); ro.appendChild(el('span', 'n', 'Eigener Preis')); tip.appendChild(ro); }
-      tip.style.display = 'block';
-      var left = sx(best) / W * r.width + 14, tw = tip.offsetWidth;
-      if (left + tw > r.width - 4) left = sx(best) / W * r.width - tw - 14;
-      tip.style.left = Math.max(0, left) + 'px'; tip.style.top = '8px';
-    }
-    function hide(){ tip.style.display = 'none'; xhair.setAttribute('visibility', 'hidden'); current = null; }
-    hit.addEventListener('pointermove', show); hit.addEventListener('pointerdown', show);
-    hit.addEventListener('pointerleave', hide);
-    svg.addEventListener('keydown', function(e){
-      var i = current == null ? dayList.length - 1 : dayList.indexOf(current);
-      if (e.key === 'ArrowLeft') i = Math.max(0, i - 1); else if (e.key === 'ArrowRight') i = Math.min(dayList.length - 1, current == null ? i : i + 1);
-      else if (e.key === 'Home') i = 0; else if (e.key === 'End') i = dayList.length - 1; else if (e.key === 'Escape') { hide(); return; } else return;
-      e.preventDefault(); showDay(dayList[i]);
-    });
-    svg.addEventListener('blur', hide);
+    return streak > 7;
   }
 
-  // ---- day counter -----------------------------------------------------
-  function drawDays(p, box){
-    box.innerHTML = '';
-    if (p.own == null || !p.series.length) return;
-    var start = startDay(), n = range().days;
-    var head = el('div', 't', 'Tage unter / über eigenem Preis (' + n + ' Tage)');
-    box.appendChild(head);
-    p.series.forEach(function(s){
-      var byDay = {}; s.points.forEach(function(q){ byDay[parse(q[0])] = q[1]; });
-      var row = el('div', 'dayrow'), who = el('div', 'who');
-      var dot = el('i', 'dot'); dot.style.background = seriesColor(s.slot); who.appendChild(dot); who.appendChild(document.createTextNode(s.label));
-      var strip = el('div', 'strip'), c = {bad:0, good:0, eq:0, none:0};
-      for (var i = 0; i < n; i++) {
-        var t = start + i * DAY, v = byDay[t], cls = v == null ? 'none' : cmp(v, p.own);
-        c[cls]++; var cell = el('i', cls); cell.title = dmy(t) + (v == null ? ': keine Daten' : ': ' + fmt(v)); strip.appendChild(cell);
+  function seg(id, opts, key, map) {
+    var el = document.getElementById(id);
+    el.innerHTML = opts.map(function (o) {
+      var val = map ? map[o] : o;
+      return '<button type="button" data-k="' + esc(o) + '" class="' + (val === S[key] ? "on" : "") + '" aria-pressed="' + (val === S[key]) + '">' + esc(o) + "</button>";
+    }).join("");
+    el.onclick = function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      S[key] = map ? map[b.dataset.k] : b.dataset.k;
+      seg(id, opts, key, map);
+      render();
+    };
+  }
+
+  function kpis() {
+    var all = DATA.products;
+    var withPrice = all.filter(function (p) { return devOf(p) != null; });
+    var under = withPrice.filter(function (p) { return devOf(p) < -0.05; });
+    var avg = withPrice.length ? withPrice.reduce(function (a, p) { return a + devOf(p); }, 0) / withPrice.length : null;
+    var worst = withPrice.reduce(function (a, p) { return !a || devOf(p) < devOf(a) ? p : a; }, null);
+    var longN = all.filter(expensiveLong).length;
+    var cards = [
+      ["Marktplatz günstiger als dein Shop",
+        under.length + ' <span style="font-size:15px;color:var(--mut);font-weight:500">von ' + all.length + "</span>",
+        '<span style="color:var(--red)">' + (all.length ? Math.round(under.length / all.length * 100) : 0) + " %</span> deines Sortiments unterboten"],
+      ["Ø Abstand bester Marktplatz",
+        avg == null ? "–" : '<span style="color:' + (avg < 0 ? "var(--red)" : "var(--grn)") + '">' + pct(avg) + "</span>",
+        withPrice.length ? "gegenüber deinem Shop-Preis" : "noch kein Marktplatzpreis"],
+      ["Größte Unterbietung",
+        worst && devOf(worst) < -0.05 ? '<span style="color:var(--red)">' + pct(devOf(worst)) + "</span>" : "–",
+        worst && devOf(worst) < -0.05 ? esc(bestOf(worst).series.label) + ": " + esc(worst.name.split(",")[0]) : "kein Marktplatz unter deinem Shop"],
+      ["Shop teurer seit > 7 Tagen", String(longN), "Kandidaten für Preisanpassung"]
+    ];
+    document.getElementById("kpis").innerHTML = cards.map(function (c) {
+      return '<div class="kpi"><div class="l">' + c[0] + '</div><div class="v num">' + c[1] + '</div><div class="h">' + c[2] + "</div></div>";
+    }).join("");
+  }
+
+  function pointsIn(series, days) {
+    var start = endDay - (days - 1) * DAY;
+    return series.points.filter(function (pt) { var t = parse(pt[0]); return t >= start && t <= endDay; });
+  }
+
+  function sparkSvg(p) {
+    var b = bestOf(p);
+    if (!b) return '<div class="cap">noch kein Verlauf</div>';
+    var a = pointsIn(b.series, S.r);
+    if (a.length < 2) return '<div class="cap">noch kein Verlauf</div>';
+    var w = 140, h = 36;
+    var vals = a.map(function (pt) { return pt[1]; });
+    if (p.own) vals.push(p.own);
+    var mn0 = Math.min.apply(null, vals), mx0 = Math.max.apply(null, vals);
+    var pd = (mx0 - mn0) * 0.25 || 1;
+    var mn = mn0 - pd, mx = mx0 + pd;
+    var xAt = function (i) { return i / (a.length - 1) * w; };
+    var yAt = function (v) { return h - (v - mn) / (mx - mn || 1) * h; };
+    var d = a.map(function (pt, i) { return (i ? "L" : "M") + xAt(i).toFixed(1) + " " + yAt(pt[1]).toFixed(1); }).join("");
+    var dev = p.own ? (b.price - p.own) / p.own * 100 : 0;
+    var c = dev < -0.05 ? "var(--red)" : dev > 0.05 ? "var(--grn)" : "var(--mut)";
+    var own = "";
+    if (p.own) {
+      var oy = Math.max(1, Math.min(h - 1, yAt(p.own)));
+      own = '<line x1="0" x2="' + w + '" y1="' + oy + '" y2="' + oy + '" stroke="var(--mut)" stroke-dasharray="3 3" stroke-width="1"/>';
+    }
+    return '<svg viewBox="0 0 ' + w + " " + h + '" width="100%" height="' + h + '" preserveAspectRatio="none" aria-hidden="true">' + own + '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>';
+  }
+
+  function noteHtml(p) {
+    var cheap = cheaperList(p);
+    if (cheap.length) {
+      var mx = cheap[0];
+      var gap = Math.abs((latest(mx)[1] - p.own) / p.own * 100);
+      var extra = cheap.length > 1 ? " · " + cheap.length + " Marktplätze darunter" : "";
+      var failed = p.series.some(function (s) { return s.lastError; });
+      var warn = failed ? " · letzter Abruf ohne neuen Preis" : "";
+      var shown = gap.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      return '<div class="note r">' + ICO.chev + "<span>" + esc(mx.label) + " ist " + shown + " % günstiger als dein Shop" + extra + warn + "</span></div>";
+    }
+    var priced = p.series.filter(function (s) { return latest(s); });
+    var failed = p.series.filter(function (s) { return s.lastError && !latest(s); });
+    if (!p.series.length) return '<div class="note n">Noch kein Marktplatz-Link hinterlegt</div>';
+    if (!priced.length && failed.length) return '<div class="note a">Letzter Abruf fehlgeschlagen' + (failed[0].lastRun ? " (" + esc(failed[0].lastRun.split("-").reverse().join(".")) + ")" : "") + "</div>";
+    if (!priced.length) return '<div class="note n">Noch kein Marktplatzpreis</div>';
+    var dearer = priced.some(function (s) { return latest(s)[1] > p.own + 0.005; });
+    if (!dearer) return '<div class="note n">Gleicher Preis wie in deinem Shop</div>';
+    return '<div class="note g">Dein Shop ist am günstigsten</div>';
+  }
+
+  function rowHtml(p) {
+    if (!p.series.length) return "";
+    return p.series.map(function (s) {
+      var pt = latest(s);
+      var dot = '<i style="background:' + s.color + '"></i>';
+      if (!pt) {
+        var why = s.lastError ? "Abruf fehlgeschlagen" : "nicht verfügbar";
+        return '<div class="row"><span class="n">' + dot + esc(s.label) + '</span><span class="at">' + why + '</span><span class="pill n">–</span></div>';
       }
-      var sum = el('div', 'sum');
-      var known = n - c.none;
-      var part = function(cls, count, word){ var e = el('span', cls); var b = el('b', null, count + (count === 1 ? ' Tag' : ' Tage')); e.appendChild(b); e.appendChild(document.createTextNode(' ' + word)); return e; };
-      sum.appendChild(part('bad', c.bad, 'günstiger als du'));
-      sum.appendChild(part('good', c.good, 'teurer'));
-      if (c.eq) sum.appendChild(part('eq', c.eq, 'gleich'));
-      sum.appendChild(el('span', 'eq', known + ' von ' + n + ' Tagen erfasst'));
-      row.appendChild(who); row.appendChild(strip); row.appendChild(sum); box.appendChild(row);
+      var d = p.own ? (pt[1] - p.own) / p.own * 100 : 0;
+      var c = d < -0.05 ? "r" : d > 0.05 ? "g" : "n";
+      var when = parse(pt[0]) < endDay ? '<span class="at"> ' + dm(parse(pt[0])) + "</span>" : "";
+      return '<div class="row num"><span class="n">' + dot + esc(s.label) + "</span><b>" + fmt(pt[1]) + when + '</b><span class="pill ' + c + '">' + (p.own ? pct(d) : "–") + "</span></div>";
+    }).join("");
+  }
+
+  var VIEW = [];
+  function render() {
+    kpis();
+    var list = DATA.products.filter(function (p) {
+      if (S.m !== "Alle" && !p.series.some(function (s) { return s.label === S.m || s.marketplace === S.m; })) return false;
+      var st = statusOf(p);
+      if (S.s === "Fehler") return st === "Scrape-Fehler" || st === "Nicht verfügbar";
+      if (S.s !== "Alle" && st !== S.s) return false;
+      return true;
+    });
+    var mkey = S.m;
+    function priceFor(p) {
+      if (mkey === "Alle") { var b = bestOf(p); return b ? b.price : Infinity; }
+      var s = p.series.filter(function (x) { return x.label === mkey; })[0];
+      var pt = s && latest(s);
+      return pt ? pt[1] : Infinity;
+    }
+    var sorters = {
+      dev: function (a, b) { return Math.abs(devOf(b) || 0) - Math.abs(devOf(a) || 0); },
+      price: function (a, b) { return priceFor(a) - priceFor(b); },
+      name: function (a, b) { return a.name.localeCompare(b.name, "de"); },
+      chg: function (a, b) { return Math.abs(weekChange(b)) - Math.abs(weekChange(a)); }
+    };
+    list.sort(sorters[S.sort] || sorters.dev);
+    VIEW = list;
+    var g = document.getElementById("grid");
+    g.className = "grid" + (S.view === "list" ? " list" : "");
+    if (!list.length) {
+      g.innerHTML = '<div class="empty">Keine Produkte für diese Filter.</div>';
+      return;
+    }
+    g.innerHTML = list.map(function (p) {
+      var host = (p.shopUrl || "").replace(/^https?:\/\//, "");
+      var img = p.imageUrl
+        ? '<img src="' + esc(p.imageUrl) + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\'kein Bild\',style:\'font-size:11px;color:#5c6370\'}))">'
+        : '<span style="font-size:11px;color:#5c6370">kein Bild</span>';
+      return '<article class="card" data-sku="' + esc(p.sku) + '" tabindex="0" role="button" aria-label="' + esc(p.name) + ' öffnen">' +
+        '<div class="top"><div class="img">' + img + "</div>" +
+        '<div style="min-width:0;flex:1"><div class="nm">' + esc(p.name) + '</div><div class="sku num">' + esc(p.sku) + '</div><div class="url">' + esc(host) + "</div></div></div>" +
+        '<div class="shop"><div><div class="l">Mein Shop</div><div class="v num">' + fmt(p.own) + '</div></div><div class="spark">' + sparkSvg(p) + "</div></div>" +
+        '<div class="rows">' + rowHtml(p) + "</div>" + noteHtml(p) + "</article>";
+    }).join("");
+  }
+
+  function productBySku(sku) { return DATA.products.filter(function (p) { return p.sku === sku; })[0]; }
+
+  function drawChart(p) {
+    var nDays = DR;
+    var start = endDay - (nDays - 1) * DAY;
+    var W = 820, H = 300, pl = 58, pr = 16, pt = 16, pb = 28;
+    var series = p.series.map(function (s) {
+      return { s: s, pts: s.points.map(function (q) { return { t: parse(q[0]), v: q[1] }; }).filter(function (q) { return q.t >= start && q.t <= endDay; }) };
+    }).filter(function (s) { return s.pts.length; });
+    var shopPts = (p.shopPoints || []).map(function (q) { return { t: parse(q[0]), v: q[1] }; }).filter(function (q) { return q.t >= start && q.t <= endDay; });
+    var vals = [];
+    series.forEach(function (s) { s.pts.forEach(function (q) { vals.push(q.v); }); });
+    shopPts.forEach(function (q) { vals.push(q.v); });
+    if (p.own != null) vals.push(p.own);
+    var host = document.getElementById("chart");
+    if (!vals.length) { host.innerHTML = '<div class="empty">Keine Preisdaten im gewählten Zeitraum.</div>'; return; }
+    var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+    var pad = (mx - mn) * 0.12 || 1; mn -= pad; mx += pad;
+    var xAt = function (t) { return pl + (t - start) / (endDay - start || DAY) * (W - pl - pr); };
+    var yAt = function (v) { return pt + (1 - (v - mn) / (mx - mn)) * (H - pt - pb); };
+    var g = "";
+    for (var k = 0; k <= 4; k++) {
+      var v = mn + (mx - mn) * k / 4;
+      g += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + yAt(v) + '" y2="' + yAt(v) + '" stroke="var(--line)"/>';
+      g += '<text x="' + (pl - 8) + '" y="' + (yAt(v) + 4) + '" text-anchor="end" font-size="11" fill="var(--mut)" class="num">' + fmt(v) + "</text>";
+    }
+    for (var i = 0; i < 5; i++) {
+      var t = start + (endDay - start) * i / 4;
+      g += '<text x="' + xAt(t) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="var(--mut)">' + dm(t) + "</text>";
+    }
+    var lines = series.map(function (s) {
+      var d = s.pts.map(function (q, idx) { return (idx ? "L" : "M") + xAt(q.t).toFixed(1) + " " + yAt(q.v).toFixed(1); }).join("");
+      var path = s.pts.length > 1 ? '<path d="' + d + '" fill="none" stroke="' + s.s.color + '" stroke-width="2" stroke-dasharray="' + s.s.dash + '" stroke-linejoin="round"/>' : "";
+      var dots = s.pts.map(function (q) { return '<circle cx="' + xAt(q.t) + '" cy="' + yAt(q.v) + '" r="3.2" fill="' + s.s.color + '"/>'; }).join("");
+      return path + dots;
+    }).join("");
+    var own = "";
+    if (shopPts.length > 1) {
+      var sd = shopPts.map(function (q, idx) { return (idx ? "L" : "M") + xAt(q.t).toFixed(1) + " " + yAt(q.v).toFixed(1); }).join("");
+      own = '<path d="' + sd + '" fill="none" stroke="var(--acc)" stroke-width="2.4"/>';
+    } else if (p.own != null) {
+      var oy = yAt(p.own);
+      own = '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + oy + '" y2="' + oy + '" stroke="var(--acc)" stroke-width="2.4"/>' +
+        '<rect x="' + (W - pr - 132) + '" y="' + (oy - 22) + '" width="132" height="18" rx="5" fill="var(--acc)"/>' +
+        '<text x="' + (W - pr - 66) + '" y="' + (oy - 9) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Mein Shop ' + fmt(p.own) + "</text>";
+    }
+    host.innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Preisverlauf ' + esc(p.name) + '" tabindex="0">' + g + own + lines +
+      '<line id="cx" y1="' + pt + '" y2="' + (H - pb) + '" stroke="var(--mut)" stroke-dasharray="3 3" visibility="hidden"/>' +
+      '<rect id="hit" x="' + pl + '" y="' + pt + '" width="' + (W - pl - pr) + '" height="' + (H - pt - pb) + '" fill="transparent"/></svg><div class="tip num" id="tip"></div>';
+    var svg = host.querySelector("svg");
+    var tip = host.querySelector("#tip");
+    var cx = host.querySelector("#cx");
+    var days = {};
+    series.forEach(function (s) { s.pts.forEach(function (q) { (days[q.t] = days[q.t] || []).push({ s: s, q: q }); }); });
+    var dayList = Object.keys(days).map(Number).sort(function (a, b) { return a - b; });
+    var cursor = dayList.length ? dayList.length - 1 : 0;
+    function show(t) {
+      if (!dayList.length) return;
+      var best = dayList[0];
+      dayList.forEach(function (d) { if (Math.abs(d - t) < Math.abs(best - t)) best = d; });
+      cursor = dayList.indexOf(best);
+      var x = xAt(best);
+      cx.setAttribute("x1", x); cx.setAttribute("x2", x); cx.setAttribute("visibility", "visible");
+      var rows = days[best].map(function (item) {
+        return '<div><span style="color:' + item.s.s.color + '">● ' + esc(item.s.s.label) + "</span><span>" + fmt(item.q.v) + "</span></div>";
+      }).join("");
+      var shop = p.own != null ? '<div style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span style="color:var(--acc)">Mein Shop</span><span>' + fmt(p.own) + "</span></div>" : "";
+      tip.innerHTML = "<b>" + dmy(best) + "</b>" + rows + shop;
+      tip.style.display = "block";
+      var r = svg.getBoundingClientRect();
+      var px = x / W * r.width;
+      tip.style.left = Math.max(0, Math.min(px + 12, r.width - 180)) + "px";
+      tip.style.top = "18px";
+    }
+    svg.addEventListener("pointermove", function (e) {
+      var r = svg.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width * W;
+      var t = start + (x - pl) / (W - pl - pr) * (endDay - start || DAY);
+      show(t);
+    });
+    svg.addEventListener("pointerleave", function () { tip.style.display = "none"; cx.setAttribute("visibility", "hidden"); });
+    svg.addEventListener("keydown", function (e) {
+      if (!dayList.length) return;
+      if (e.key === "ArrowLeft") cursor = Math.max(0, cursor - 1);
+      else if (e.key === "ArrowRight") cursor = Math.min(dayList.length - 1, cursor + 1);
+      else if (e.key === "Home") cursor = 0;
+      else if (e.key === "End") cursor = dayList.length - 1;
+      else return;
+      e.preventDefault();
+      show(dayList[cursor]);
     });
   }
 
-  // ---- legend ----------------------------------------------------------
-  function drawLegend(p, box){
-    box.innerHTML = '';
-    var start = startDay();
-    p.series.forEach(function(s){
-      var it = el('span', 'it'), key = el('span', 'key'); key.style.borderColor = seriesColor(s.slot); key.style.borderTopStyle = keyStyle(s.slot); it.appendChild(key);
-      var inRange = s.points.filter(function(q){ return parse(q[0]) >= start; });
-      var last = inRange.length ? inRange[inRange.length - 1] : (s.points.length ? s.points[s.points.length - 1] : null);
-      if (last) { it.appendChild(el('span', 'v', fmt(last[1]))); it.appendChild(el('span', 'name', s.label + ' · ' + dmy(parse(last[0])))); }
-      else it.appendChild(el('span', 'name', s.label + ' · noch keine Daten'));
-      if (s.lastError) it.appendChild(el('span', 'warn', ' · letzter Abruf fehlgeschlagen' + (s.lastRun ? ' (' + dmy(parse(s.lastRun)) + ')' : '')));
-      box.appendChild(it);
+  function openD(sku) {
+    var p = productBySku(sku);
+    if (!p) return;
+    openSku = sku;
+    var st = statusOf(p);
+    var host = (p.shopUrl || "").replace(/^https?:\/\//, "");
+    var img = p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="">' : "";
+    var links = "";
+    if (p.shopUrl) links += '<a class="me" href="' + esc(p.shopUrl) + '" target="_blank" rel="noopener">In meinem Shop öffnen ' + ICO.ext + "</a>";
+    p.series.forEach(function (s) {
+      links += '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">Bei ' + esc(s.label) + " öffnen " + ICO.ext + "</a>";
     });
-    if (p.own != null) { var o = el('span', 'it'); o.appendChild(el('span', 'key own')); o.appendChild(el('span', 'v', fmt(p.own))); o.appendChild(el('span', 'name', 'Eigener Preis')); box.appendChild(o); }
+    var ids = "SKU " + esc(p.sku) + (p.ean ? " · EAN " + esc(p.ean) : "") + ' · Dein Preis <b style="color:var(--fg)">' + fmt(p.own) + "</b>";
+    var cmp = '<div class="me"><div class="h" style="color:var(--acc);font-weight:650">Mein Shop</div><div class="v">' + fmt(p.own) + '</div><div class="at">Referenz</div></div>';
+    cmp += p.series.map(function (s) {
+      var pt = latest(s);
+      var d = pt && p.own ? (pt[1] - p.own) / p.own * 100 : null;
+      var pill = d == null ? '<span class="at">' + (s.lastError ? "Abruf fehlgeschlagen" : "nicht verfügbar") + "</span>" : '<span class="pill ' + (d < -0.05 ? "r" : d > 0.05 ? "g" : "n") + '">' + pct(d) + "</span>";
+      var when = pt ? '<div class="at">' + dmy(parse(pt[0])) + "</div>" : "";
+      return '<div><div class="h"><i style="background:' + s.color + '"></i>' + esc(s.label) + '</div><div class="v">' + (pt ? fmt(pt[1]) : "–") + "</div>" + pill + when + "</div>";
+    }).join("");
+    var ranges = Object.keys(RANGES).map(function (k) {
+      return '<button type="button" class="' + (RANGES[k] === DR ? "on" : "") + '" data-v="' + RANGES[k] + '">' + k + "</button>";
+    }).join("");
+    var legend = p.series.map(function (s) {
+      return '<span><svg width="18" height="4" aria-hidden="true"><line x1="0" x2="18" y1="2" y2="2" stroke="' + s.color + '" stroke-width="2.4" stroke-dasharray="' + s.dash + '"/></svg>' + esc(s.label) + "</span>";
+    }).join("") + '<span><svg width="18" height="4" aria-hidden="true"><line x1="0" x2="18" y1="2" y2="2" stroke="var(--acc)" stroke-width="2.4"/></svg>Mein Shop</span>';
+    document.getElementById("panel").innerHTML =
+      '<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button type="button" class="btn ic" id="close" aria-label="Schließen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
+      '<div class="ph"><div class="img">' + img + "</div>" +
+      '<div style="flex:1"><h2>' + esc(p.name) + '</h2><div class="ids num">' + ids + '</div>' +
+      '<div class="url" style="margin-bottom:8px">' + esc(host) + '</div><div class="links">' + links + "</div></div>" +
+      '<span class="badge ' + BADGE[st] + '">' + esc(st) + "</span></div>" +
+      '<div class="box"><div class="bh"><b>Preisverlauf · Mein Shop vs. Marktplätze</b><div class="seg" id="dtr">' + ranges + '</div></div>' +
+      '<div class="leg">' + legend + '</div><div id="chart"></div></div>' +
+      '<div class="box"><div class="bh"><b>Zuletzt im Vergleich</b><span class="at">Stand ' + esc(DATA.generated) + '</span></div><div class="cmp num">' + cmp + "</div></div>";
+    document.getElementById("ov").classList.add("open");
+    document.getElementById("close").focus();
+    drawChart(p);
+    document.getElementById("dtr").onclick = function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      DR = +b.dataset.v;
+      openD(sku);
+    };
   }
 
-  function renderAll(){
-    syncFilter();
-    DATA.products.forEach(function(p, i){
-      drawLegend(p, document.getElementById('legend-' + i));
-      drawChart(p, document.getElementById('chart-' + i));
-      drawDays(p, document.getElementById('days-' + i));
+  function rows() {
+    var mps = DATA.marketplaces;
+    var head = ["SKU", "Produkt", "Mein Shop (EUR)"].concat(mps.reduce(function (a, m) { return a.concat([m.label + " (EUR)", m.label + " Abstand %"]); }, [])).concat(["Bester Marktplatz", "Status", "Shop-URL", "Stand"]);
+    function n2(v) { return v == null ? "" : v.toFixed(2).replace(".", ","); }
+    var body = VIEW.map(function (p) {
+      var b = bestOf(p);
+      var cells = [p.sku, p.name, n2(p.own)];
+      mps.forEach(function (m) {
+        var s = p.series.filter(function (x) { return x.marketplace === m.key; })[0];
+        var pt = s && latest(s);
+        cells.push(pt ? n2(pt[1]) : "");
+        cells.push(pt && p.own ? n2((pt[1] - p.own) / p.own * 100) : "");
+      });
+      cells.push(b ? b.series.label : "", statusOf(p), p.shopUrl || "", DATA.generated);
+      return cells;
     });
+    return [head].concat(body);
   }
-  renderAll();
-  var pending;
-  window.addEventListener('resize', function(){ clearTimeout(pending); pending = setTimeout(renderAll, 120); });
+  function dl(name, data, type) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: type }));
+    a.download = name;
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  function csvEsc(v) { v = String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+
+  document.getElementById("sort").onchange = function (e) { S.sort = e.target.value; render(); };
+  document.getElementById("view").onclick = function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    S.view = b.dataset.v;
+    Array.prototype.forEach.call(e.currentTarget.children, function (x) { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+    render();
+  };
+  document.getElementById("grid").onclick = function (e) {
+    var c = e.target.closest(".card");
+    if (c) openD(c.dataset.sku);
+  };
+  document.getElementById("grid").onkeydown = function (e) {
+    var c = e.target.closest(".card");
+    if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openD(c.dataset.sku); }
+  };
+  var ov = document.getElementById("ov");
+  ov.onclick = function (e) { if (e.target === ov) ov.classList.remove("open"); };
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") ov.classList.remove("open"); });
+
+  var exm = document.getElementById("exm");
+  document.getElementById("exb").onclick = function (e) { e.stopPropagation(); exm.classList.toggle("open"); };
+  document.addEventListener("click", function () { exm.classList.remove("open"); });
+  exm.onclick = function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    var x = b.dataset.x;
+    var stamp = (DATA.generated || "").slice(0, 10).split(".").reverse().join("-");
+    var table = rows();
+    if (x === "csv") dl("price-radar_" + stamp + ".csv", "\ufeff" + table.map(function (r) { return r.map(csvEsc).join(";"); }).join("\r\n"), "text/csv;charset=utf-8");
+    if (x === "xls") dl("price-radar_" + stamp + ".xls", "\ufeff<html><head><meta charset=\"utf-8\"></head><body><table border=\"1\">" + table.map(function (r, i) {
+      return "<tr>" + r.map(function (c) { return "<" + (i ? "td" : "th") + ">" + esc(c) + "</" + (i ? "td" : "th") + ">"; }).join("") + "</tr>";
+    }).join("") + "</table></body></html>", "application/vnd.ms-excel");
+    if (x === "pdf") window.print();
+  };
+
+  var mpLabels = ["Alle"].concat(DATA.marketplaces.map(function (m) { return m.label; }));
+  seg("fm", mpLabels, "m");
+  seg("fs", ["Alle", "Günstiger", "Teurer", "Gleich", "Fehler"], "s");
+  seg("tr", Object.keys(RANGES), "r", RANGES);
+  render();
 })();
 """
 
 
-def chip(delta):
-    cls = "bad" if delta < -0.05 else ("good" if delta > 0.05 else "eq")
-    sign = "+" if delta > 0 else ""
-    num = f"{delta:.1f}".replace(".", ",")
-    return f'<span class="chip {cls}">{sign}{num} %</span>'
-
-
 def build():
     data = collect()
-    mps = data["marketplaces"]
-
-    # overview table: latest state per product × marketplace
-    rows = []
-    undercut = 0
-    for p in data["products"]:
-        cells = [f'<td class="name"><span class="n">{html.escape(p["name"])}</span>'
-                 f'<span class="s">{html.escape(p["sku"])}</span></td>',
-                 f'<td data-h="Eigener Preis"><span class="price own-price">{fmt(p["own"])}</span></td>']
-        by_mp = {s["marketplace"]: s for s in p["series"]}
-        is_undercut = False
-        for mp in mps:
-            s = by_mp.get(mp["key"])
-            if not s or not s["points"]:
-                err = ""
-                if s and s["lastError"]:
-                    err = f'<span class="warn">Abruf fehlgeschlagen</span>'
-                cells.append(f'<td class="na" data-h="{html.escape(mp["label"])}"><span class="since">–</span>{err}</td>')
-                continue
-            d, price = s["points"][-1]
-            delta_html = ""
-            if p["own"]:
-                delta = (price - p["own"]) / p["own"] * 100
-                delta_html = "<br>" + chip(delta)
-                if delta < -0.05:
-                    is_undercut = True
-            stale = ""
-            if s["lastError"]:
-                stale = '<br><span class="warn">letzter Abruf fehlgeschlagen</span>'
-            cells.append(f'<td data-h="{html.escape(mp["label"])}"><span class="price">{fmt(price)}</span>'
-                         f'{delta_html}<span class="since">Stand {de_date(d)}</span>{stale}</td>')
-        undercut += is_undercut
-        rows.append("<tr>" + "".join(cells) + "</tr>")
-
-    mp_headers = "".join(
-        f'<th><span class="dot" style="background:var(--s{m["slot"]})"></span>{html.escape(m["label"])}</th>'
-        for m in mps)
-
-    cards = []
-    for i, p in enumerate(data["products"]):
-        cards.append(
-            f'<section class="card product" aria-labelledby="p{i}">'
-            f'<div class="product-head"><h2 id="p{i}">{html.escape(p["name"])}</h2>'
-            f'<span class="sku">{html.escape(p["sku"])}</span></div>'
-            f'<div class="legend" id="legend-{i}"></div>'
-            f'<div class="chart-wrap" id="chart-{i}"></div>'
-            f'<div class="days" id="days-{i}"></div></section>')
-
-    n_products = len(data["products"])
-    n_mp = len(mps)
-    tagline = (f'<b>{n_products}</b> Produkte auf <b>{n_mp}</b> Marktplätzen · '
-               f'<b>{undercut}</b> aktuell unterboten')
-    span = ""
-    if data["firstDate"]:
-        span = f'Daten seit {de_date(data["firstDate"])} · '
-
-    page = f"""<!doctype html>
+    payload = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+    page = """<!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Preisradar</title>
-<style>{CSS}</style>
+<title>Price Radar</title>
+<style>""" + CSS + """</style>
 </head>
 <body>
 <div class="wrap">
-<header class="head">
-  <div class="brand"><h1>Preisradar</h1><div class="tag">{tagline}</div></div>
-  <div class="meta">{span}Stand {data["generated"]}<br>
-    Export: <a href="history.csv">CSV</a> · <a href="history_excel.csv">Excel-CSV</a></div>
+<header>
+  <div class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6-6"/></svg></div>
+  <div><h1>Price Radar</h1><div class="sub">Marktpreise vs. dein Preis</div></div>
+  <div class="sp"></div>
+  <div class="stand num"><span class="dot" aria-hidden="true"></span>Stand: """ + data["generated"] + """</div>
+  <div class="dd">
+    <button class="btn" id="exb" type="button" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg><span class="hide-m">Exportieren</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="menu" id="exm" role="menu">
+      <button type="button" data-x="csv" role="menuitem"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8 13h8M8 17h8"/></svg><span>CSV herunterladen<small>Aktuelle Ansicht, Semikolon, UTF-8</small></span></button>
+      <button type="button" data-x="xls" role="menuitem"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg><span>Excel (.xls)<small>Öffnet direkt in Excel</small></span></button>
+      <button type="button" data-x="pdf" role="menuitem"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9V4h12v5M6 18H4v2h16v-2h-2M6 14h12v4H6z"/></svg><span>Bericht als PDF<small>Druckansicht, „Als PDF speichern“</small></span></button>
+      <hr>
+      <a role="menuitem" href="history.csv"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Verlauf als CSV<small>Alle Tage, Komma, Punkt</small></span></a>
+      <a role="menuitem" href="history_excel.csv"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>Verlauf für Excel<small>Semikolon, Komma-Dezimal</small></span></a>
+    </div>
+  </div>
 </header>
-
-<div class="filters" role="group" aria-label="Zeitraum">
-  <span class="lbl">Zeitraum</span>
-  <div class="seg" id="range"></div>
-  <span class="hint" id="range-hint"></span>
+<section class="kpis" id="kpis" aria-label="Kennzahlen"></section>
+<div class="bar">
+  <div class="seg" id="fm" role="group" aria-label="Marktplatz"></div>
+  <div class="seg" id="fs" role="group" aria-label="Status"></div>
+  <div class="sp hide-m"></div>
+  <label class="hide-m" style="position:absolute;width:1px;height:1px;overflow:hidden">Sortierung</label>
+  <select id="sort" aria-label="Sortierung">
+    <option value="dev">Größte Abweichung</option>
+    <option value="price">Preis</option>
+    <option value="name">Name</option>
+    <option value="chg">Letzte Änderung</option>
+  </select>
+  <div class="seg" id="tr" role="group" aria-label="Zeitraum"></div>
+  <div class="seg" id="view" role="group" aria-label="Ansicht"><button type="button" class="on" data-v="grid" title="Raster" aria-label="Raster" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5"/><rect x="13.5" y="4" width="6.5" height="6.5"/><rect x="4" y="13.5" width="6.5" height="6.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5"/></svg></button><button type="button" data-v="list" title="Liste" aria-label="Liste" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11M4 7h.01M4 12h.01M4 17h.01"/></svg></button></div>
 </div>
-
-<div class="card overview"><table>
-<thead><tr><th class="name">Produkt</th><th>Eigener Preis</th>{mp_headers}</tr></thead>
-<tbody>{''.join(rows)}</tbody>
-</table></div>
-
-{''.join(cards)}
-
-<p class="foot">Rot = Marktplatz ist günstiger als der eigene Preis, grün = teurer. Der Tagesbalken zeigt jeden Tag des
-gewählten Zeitraums; hellgrau = kein Preis erfasst. Preise sind der niedrigste je Tag erfasste Wert.</p>
+<main class="grid" id="grid"></main>
+<p class="foot">Rot heißt: der Marktplatz ist günstiger als dein Shop. Grün heißt: dein Shop ist günstiger. Die gestrichelte Linie in der Sparkline ist dein Shop-Preis. Preise sind der niedrigste je Tag erfasste Wert.</p>
 </div>
-<script>window.__PRICE_DATA__ = {json.dumps(data, ensure_ascii=False)};</script>
-<script>{JS}</script>
+<div class="ov" id="ov"><div class="panel" id="panel" role="dialog" aria-modal="true" aria-label="Produktdetail"></div></div>
+<script>window.__PRICE_DATA__ = """ + payload + """;</script>
+<script>""" + JS + """</script>
 </body>
-</html>"""
+</html>
+"""
     OUT.write_text(page, encoding="utf-8")
-    print(f"wrote {OUT}")
-
-
-def fmt(price):
-    if price is None:
-        return "–"
-    return f"{price:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+    print(f"wrote {OUT} ({len(data['products'])} products)")
 
 
 if __name__ == "__main__":

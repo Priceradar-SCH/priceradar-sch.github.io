@@ -64,6 +64,54 @@ def dump_failure(match, page):
                                "html": page.get("html")}, ensure_ascii=False))
 
 
+def fetch_html(url):
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/122.0.0.0 Safari/537.36"),
+            "Accept-Language": "de-DE,de;q=0.9",
+            "Accept": "text/html",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8", "replace")
+
+
+def refresh_shops(conn):
+    """Read each active product's own shop page and store price + og:image.
+
+    The shop (Shopify) answers a normal fetch and carries og:price:amount and
+    og:image, so this does not spend a Firecrawl credit. A failed fetch leaves
+    the CSV price and image in place.
+    """
+    rows = conn.execute(
+        "SELECT sku, shop_url FROM products WHERE active=1 AND shop_url IS NOT NULL"
+    ).fetchall()
+    ok = 0
+    for row in rows:
+        label = f"{row['sku']} @ shop"
+        try:
+            html = fetch_html(row["shop_url"])
+        except (urllib.error.URLError, TimeoutError) as exc:
+            print(f"  FAIL  {label}: {exc}")
+            continue
+        page = parse.page_from_html(html)
+        result = parse.extract(page)
+        image = parse.image_url(page)
+        if result["price"] is None:
+            print(f"  FAIL  {label}: no price on shop page")
+            if image:
+                conn.execute("UPDATE products SET image_url=? WHERE sku=?", (image, row["sku"]))
+                conn.commit()
+            continue
+        db.record_shop_price(conn, row["sku"], result["price"], image)
+        ok += 1
+        print(f"  OK    {label}: {result['price']} EUR" + (f"  image={image}" if image else ""))
+    print(f"shops: {ok}/{len(rows)} own prices recorded")
+
+
 def record(conn, match, page):
     result = parse.extract(page)
     status = page.get("metadata", {}).get("statusCode")
@@ -122,6 +170,7 @@ def main():
     load_env()
     conn = db.connect()
     db.sync_from_csv(conn)
+    refresh_shops(conn)
     if len(sys.argv) >= 3 and sys.argv[1] == "--ingest":
         run_ingest(conn, sys.argv[2])
     else:

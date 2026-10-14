@@ -1,0 +1,623 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-14T17:07:05Z",
+  "title": "Design System: Price Radar",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Signal Violet",
+        "canonical": "#5b5bf6",
+        "tonalRamp": [
+          "oklch(15% 0.225 276)",
+          "oklch(26% 0.225 276)",
+          "oklch(38% 0.225 276)",
+          "oklch(49% 0.225 276)",
+          "oklch(61% 0.225 276)",
+          "oklch(73% 0.225 276)",
+          "oklch(84% 0.225 276)",
+          "oklch(95% 0.225 276)"
+        ]
+      },
+      "accent-wash": {
+        "role": "primary",
+        "displayName": "Violet Wash",
+        "canonical": "#ececfe",
+        "tonalRamp": [
+          "oklch(15% 0.024 286)",
+          "oklch(26% 0.024 286)",
+          "oklch(38% 0.024 286)",
+          "oklch(49% 0.024 286)",
+          "oklch(61% 0.024 286)",
+          "oklch(73% 0.024 286)",
+          "oklch(84% 0.024 286)",
+          "oklch(95% 0.024 286)"
+        ]
+      },
+      "accent-lift": {
+        "role": "primary",
+        "displayName": "Lifted Violet",
+        "canonical": "#7c5cff",
+        "tonalRamp": [
+          "oklch(15% 0.230 286)",
+          "oklch(26% 0.230 286)",
+          "oklch(38% 0.230 286)",
+          "oklch(49% 0.230 286)",
+          "oklch(61% 0.230 286)",
+          "oklch(73% 0.230 286)",
+          "oklch(84% 0.230 286)",
+          "oklch(95% 0.230 286)"
+        ]
+      },
+      "undercut": {
+        "role": "secondary",
+        "displayName": "Undercut Red",
+        "canonical": "#e5484d",
+        "tonalRamp": [
+          "oklch(15% 0.193 23)",
+          "oklch(26% 0.193 23)",
+          "oklch(38% 0.193 23)",
+          "oklch(49% 0.193 23)",
+          "oklch(61% 0.193 23)",
+          "oklch(73% 0.193 23)",
+          "oklch(84% 0.193 23)",
+          "oklch(95% 0.193 23)"
+        ]
+      },
+      "undercut-wash": {
+        "role": "secondary",
+        "displayName": "Undercut Wash",
+        "canonical": "#fdecec",
+        "tonalRamp": [
+          "oklch(15% 0.018 17)",
+          "oklch(26% 0.018 17)",
+          "oklch(38% 0.018 17)",
+          "oklch(49% 0.018 17)",
+          "oklch(61% 0.018 17)",
+          "oklch(73% 0.018 17)",
+          "oklch(84% 0.018 17)",
+          "oklch(95% 0.018 17)"
+        ]
+      },
+      "undercut-ink": {
+        "role": "secondary",
+        "displayName": "Undercut Ink",
+        "canonical": "#9f1239",
+        "tonalRamp": [
+          "oklch(15% 0.171 14)",
+          "oklch(26% 0.171 14)",
+          "oklch(38% 0.171 14)",
+          "oklch(49% 0.171 14)",
+          "oklch(61% 0.171 14)",
+          "oklch(73% 0.171 14)",
+          "oklch(84% 0.171 14)",
+          "oklch(95% 0.171 14)"
+        ]
+      },
+      "ahead": {
+        "role": "secondary",
+        "displayName": "Shop Green",
+        "canonical": "#1f7a45",
+        "tonalRamp": [
+          "oklch(15% 0.118 153)",
+          "oklch(26% 0.118 153)",
+          "oklch(38% 0.118 153)",
+          "oklch(49% 0.118 153)",
+          "oklch(61% 0.118 153)",
+          "oklch(73% 0.118 153)",
+          "oklch(84% 0.118 153)",
+          "oklch(95% 0.118 153)"
+        ]
+      },
+      "ahead-wash": {
+        "role": "secondary",
+        "displayName": "Green Wash",
+        "canonical": "#e6f6ec",
+        "tonalRamp": [
+          "oklch(15% 0.021 159)",
+          "oklch(26% 0.021 159)",
+          "oklch(38% 0.021 159)",
+          "oklch(49% 0.021 159)",
+          "oklch(61% 0.021 159)",
+          "oklch(73% 0.021 159)",
+          "oklch(84% 0.021 159)",
+          "oklch(95% 0.021 159)"
+        ]
+      },
+      "ahead-ink": {
+        "role": "secondary",
+        "displayName": "Green Ink",
+        "canonical": "#166534",
+        "tonalRamp": [
+          "oklch(15% 0.108 151)",
+          "oklch(26% 0.108 151)",
+          "oklch(38% 0.108 151)",
+          "oklch(49% 0.108 151)",
+          "oklch(61% 0.108 151)",
+          "oklch(73% 0.108 151)",
+          "oklch(84% 0.108 151)",
+          "oklch(95% 0.108 151)"
+        ]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Fetch Amber",
+        "canonical": "#8a5a08",
+        "tonalRamp": [
+          "oklch(15% 0.106 72)",
+          "oklch(26% 0.106 72)",
+          "oklch(38% 0.106 72)",
+          "oklch(49% 0.106 72)",
+          "oklch(61% 0.106 72)",
+          "oklch(73% 0.106 72)",
+          "oklch(84% 0.106 72)",
+          "oklch(95% 0.106 72)"
+        ]
+      },
+      "warning-wash": {
+        "role": "secondary",
+        "displayName": "Amber Wash",
+        "canonical": "#fdf3e1",
+        "tonalRamp": [
+          "oklch(15% 0.026 82)",
+          "oklch(26% 0.026 82)",
+          "oklch(38% 0.026 82)",
+          "oklch(49% 0.026 82)",
+          "oklch(61% 0.026 82)",
+          "oklch(73% 0.026 82)",
+          "oklch(84% 0.026 82)",
+          "oklch(95% 0.026 82)"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Cool Ground",
+        "canonical": "#f7f7f8",
+        "tonalRamp": [
+          "oklch(15% 0.001 286)",
+          "oklch(26% 0.001 286)",
+          "oklch(38% 0.001 286)",
+          "oklch(49% 0.001 286)",
+          "oklch(61% 0.001 286)",
+          "oklch(73% 0.001 286)",
+          "oklch(84% 0.001 286)",
+          "oklch(95% 0.001 286)"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(73% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#0b0b0f",
+        "tonalRamp": [
+          "oklch(15% 0.009 285)",
+          "oklch(26% 0.009 285)",
+          "oklch(38% 0.009 285)",
+          "oklch(49% 0.009 285)",
+          "oklch(61% 0.009 285)",
+          "oklch(73% 0.009 285)",
+          "oklch(84% 0.009 285)",
+          "oklch(95% 0.009 285)"
+        ]
+      },
+      "mute": {
+        "role": "neutral",
+        "displayName": "Mute Slate",
+        "canonical": "#5c6370",
+        "tonalRamp": [
+          "oklch(15% 0.022 263)",
+          "oklch(26% 0.022 263)",
+          "oklch(38% 0.022 263)",
+          "oklch(49% 0.022 263)",
+          "oklch(61% 0.022 263)",
+          "oklch(73% 0.022 263)",
+          "oklch(84% 0.022 263)",
+          "oklch(95% 0.022 263)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e7e7eb",
+        "tonalRamp": [
+          "oklch(15% 0.005 286)",
+          "oklch(26% 0.005 286)",
+          "oklch(38% 0.005 286)",
+          "oklch(49% 0.005 286)",
+          "oklch(61% 0.005 286)",
+          "oklch(73% 0.005 286)",
+          "oklch(84% 0.005 286)",
+          "oklch(95% 0.005 286)"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "Soft Fill",
+        "canonical": "#f1f1f4",
+        "tonalRamp": [
+          "oklch(15% 0.004 286)",
+          "oklch(26% 0.004 286)",
+          "oklch(38% 0.004 286)",
+          "oklch(49% 0.004 286)",
+          "oklch(61% 0.004 286)",
+          "oklch(73% 0.004 286)",
+          "oklch(84% 0.004 286)",
+          "oklch(95% 0.004 286)"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Panel Scrim",
+        "canonical": "rgba(8,8,14,.45)",
+        "tonalRamp": [
+          "oklch(15% 0.013 285)",
+          "oklch(26% 0.013 285)",
+          "oklch(38% 0.013 285)",
+          "oklch(49% 0.013 285)",
+          "oklch(61% 0.013 285)",
+          "oklch(73% 0.013 285)",
+          "oklch(84% 0.013 285)",
+          "oklch(95% 0.013 285)"
+        ]
+      },
+      "zalando": {
+        "role": "tertiary",
+        "displayName": "Zalando Orange",
+        "canonical": "#ff6900",
+        "tonalRamp": [
+          "oklch(15% 0.202 44)",
+          "oklch(26% 0.202 44)",
+          "oklch(38% 0.202 44)",
+          "oklch(49% 0.202 44)",
+          "oklch(61% 0.202 44)",
+          "oklch(73% 0.202 44)",
+          "oklch(84% 0.202 44)",
+          "oklch(95% 0.202 44)"
+        ]
+      },
+      "otto": {
+        "role": "tertiary",
+        "displayName": "Otto Red",
+        "canonical": "#d4002a",
+        "tonalRamp": [
+          "oklch(15% 0.222 23)",
+          "oklch(26% 0.222 23)",
+          "oklch(38% 0.222 23)",
+          "oklch(49% 0.222 23)",
+          "oklch(61% 0.222 23)",
+          "oklch(73% 0.222 23)",
+          "oklch(84% 0.222 23)",
+          "oklch(95% 0.222 23)"
+        ]
+      },
+      "galeria": {
+        "role": "tertiary",
+        "displayName": "Galeria Blue",
+        "canonical": "#2a6ad8",
+        "tonalRamp": [
+          "oklch(15% 0.181 261)",
+          "oklch(26% 0.181 261)",
+          "oklch(38% 0.181 261)",
+          "oklch(49% 0.181 261)",
+          "oklch(61% 0.181 261)",
+          "oklch(73% 0.181 261)",
+          "oklch(84% 0.181 261)",
+          "oklch(95% 0.181 261)"
+        ]
+      },
+      "amazon": {
+        "role": "tertiary",
+        "displayName": "Amazon Amber",
+        "canonical": "#e07a00",
+        "tonalRamp": [
+          "oklch(15% 0.163 58)",
+          "oklch(26% 0.163 58)",
+          "oklch(38% 0.163 58)",
+          "oklch(49% 0.163 58)",
+          "oklch(61% 0.163 58)",
+          "oklch(73% 0.163 58)",
+          "oklch(84% 0.163 58)",
+          "oklch(95% 0.163 58)"
+        ]
+      },
+      "ebay": {
+        "role": "tertiary",
+        "displayName": "eBay Blue",
+        "canonical": "#0064d2",
+        "tonalRamp": [
+          "oklch(15% 0.187 257)",
+          "oklch(26% 0.187 257)",
+          "oklch(38% 0.187 257)",
+          "oklch(49% 0.187 257)",
+          "oklch(61% 0.187 257)",
+          "oklch(73% 0.187 257)",
+          "oklch(84% 0.187 257)",
+          "oklch(95% 0.187 257)"
+        ]
+      },
+      "about-you": {
+        "role": "tertiary",
+        "displayName": "About You Black",
+        "canonical": "#111111",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(73% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "kaufland": {
+        "role": "tertiary",
+        "displayName": "Kaufland Red",
+        "canonical": "#e10915",
+        "tonalRamp": [
+          "oklch(15% 0.232 28)",
+          "oklch(26% 0.232 28)",
+          "oklch(38% 0.232 28)",
+          "oklch(49% 0.232 28)",
+          "oklch(61% 0.232 28)",
+          "oklch(73% 0.232 28)",
+          "oklch(84% 0.232 28)",
+          "oklch(95% 0.232 28)"
+        ]
+      },
+      "series-unknown": {
+        "role": "tertiary",
+        "displayName": "Unassigned Slate",
+        "canonical": "#5c6570",
+        "tonalRamp": [
+          "oklch(15% 0.021 253)",
+          "oklch(26% 0.021 253)",
+          "oklch(38% 0.021 253)",
+          "oklch(49% 0.021 253)",
+          "oklch(61% 0.021 253)",
+          "oklch(73% 0.021 253)",
+          "oklch(84% 0.021 253)",
+          "oklch(95% 0.021 253)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "KPI figures. 22px below 600px."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The shop price inside the violet block."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Product name, two lines. Page name is 17px; panel title is 19px."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Page default at 14px. Buttons are 13px."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Segment buttons, KPI labels, and marketplace rows."
+      }
+    },
+    "shadows": [
+      {
+        "name": "resting",
+        "value": "0 1px 2px rgba(16,16,24,.04), 0 8px 24px rgba(16,16,24,.06)",
+        "purpose": "Cards, KPI tiles, and panel boxes."
+      },
+      {
+        "name": "segment-selected",
+        "value": "0 1px 2px rgba(16,16,24,.08)",
+        "purpose": "The white button inside a segment track."
+      },
+      {
+        "name": "tooltip",
+        "value": "0 8px 24px rgba(16,16,24,.12)",
+        "purpose": "Chart tooltip."
+      },
+      {
+        "name": "menu",
+        "value": "0 12px 32px rgba(16,16,24,.12)",
+        "purpose": "Export menu."
+      },
+      {
+        "name": "panel",
+        "value": "-20px 0 60px rgba(0,0,0,.18)",
+        "purpose": "Side panel, cast to the left."
+      },
+      {
+        "name": "freshness",
+        "value": "0 0 0 3px #e6f6ec",
+        "purpose": "Ring on the 7px timestamp dot. A status mark, not a surface shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "card-lift",
+        "value": "transform .18s cubic-bezier(.2,.7,.2,1), border-color .18s",
+        "purpose": "Card hover lifts 2px and mixes the border toward violet. Only when reduced motion is not requested."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "kpi-two",
+        "value": "900px"
+      },
+      {
+        "name": "phone",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "White hairline control for export and panel close. There is no filled primary button.",
+      "html": "<button class=\"ds-btn\" type=\"button\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3v12m0 0l-4-4m4 4l4-4M4 19h16\"/></svg>Exportieren</button>",
+      "css": ".ds-btn { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-size: 13px; font-weight: 550; height: 34px; padding: 0 12px; border: 1px solid #e7e7eb; background: #fff; color: #0b0b0f; border-radius: 9px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; } .ds-btn:hover { background: #f1f1f4; } .ds-btn:focus-visible { outline: 2px solid #5b5bf6; outline-offset: 2px; }"
+    },
+    {
+      "name": "Select",
+      "kind": "input",
+      "refersTo": "select",
+      "description": "Sort control. Native select, same height and hairline as the button.",
+      "html": "<select class=\"ds-select\" aria-label=\"Sortierung\"><option>Größte Abweichung</option><option>Preis</option><option>Name</option></select>",
+      "css": ".ds-select { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-size: 13px; height: 34px; border: 1px solid #e7e7eb; background: #fff; color: #0b0b0f; border-radius: 9px; padding: 0 10px; } .ds-select:focus-visible { outline: 2px solid #5b5bf6; outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented control",
+      "kind": "chip",
+      "refersTo": "segment",
+      "description": "Filter track for marketplace, status, range, and grid or list.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"Status\"><button type=\"button\">Alle</button><button type=\"button\" class=\"on\" aria-pressed=\"true\">Günstiger</button><button type=\"button\">Teurer</button><button type=\"button\">Gleich</button></div>",
+      "css": ".ds-seg { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; display: inline-flex; background: #f1f1f4; border: 1px solid #e7e7eb; border-radius: 9px; padding: 2px; gap: 2px; } .ds-seg button { border: 0; background: none; color: #5c6370; font: inherit; font-size: 12.5px; font-weight: 550; padding: 5px 9px; border-radius: 7px; cursor: pointer; } .ds-seg button.on { background: #fff; color: #0b0b0f; box-shadow: 0 1px 2px rgba(16,16,24,.08); } .ds-seg button:focus-visible { outline: 2px solid #5b5bf6; outline-offset: 2px; }"
+    },
+    {
+      "name": "Header",
+      "kind": "nav",
+        "refersTo": "header",
+        "description": "Radar mark, page name, subtitle, freshness timestamp, and the export button.",
+      "html": "<header class=\"ds-header\"><div class=\"ds-logo\" aria-hidden=\"true\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"4.5\"/><path d=\"M12 12l6-6\"/></svg></div><div><h1>Price Radar</h1><div class=\"ds-sub\">Marktpreise vs. dein Preis</div></div><div class=\"ds-stand\"><span class=\"ds-dot\" aria-hidden=\"true\"></span>Stand: 14.10.2026, 19:02</div></header>",
+      "css": ".ds-header { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; display: flex; align-items: center; gap: 14px; color: #0b0b0f; } .ds-logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #5b5bf6, #7c5cff); display: grid; place-items: center; color: #fff; flex: none; } .ds-header h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; font-weight: 650; } .ds-sub { color: #5c6370; font-size: 13px; } .ds-stand { margin-left: auto; color: #5c6370; font-size: 12.5px; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; } .ds-dot { width: 7px; height: 7px; border-radius: 50%; background: #1f7a45; box-shadow: 0 0 0 3px #e6f6ec; }"
+    },
+    {
+      "name": "KPI tile",
+      "kind": "card",
+      "refersTo": "kpi",
+      "description": "One of the four scan figures. An undercut value is Undercut Red.",
+      "html": "<article class=\"ds-kpi\"><div class=\"ds-l\">Abstand bester Marktplatz</div><div class=\"ds-v\">−24,9 %</div><div class=\"ds-h\">gegenüber deinem Shop-Preis</div></article>",
+      "css": ".ds-kpi { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; background: #fff; border: 1px solid #e7e7eb; border-radius: 16px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(16,16,24,.04), 0 8px 24px rgba(16,16,24,.06); color: #0b0b0f; max-width: 280px; } .ds-kpi .ds-l { color: #5c6370; font-size: 12.5px; } .ds-kpi .ds-v { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; margin-top: 6px; font-variant-numeric: tabular-nums; color: #e5484d; } .ds-kpi .ds-h { font-size: 12px; color: #5c6370; margin-top: 2px; }"
+    },
+    {
+      "name": "Shop block",
+      "kind": "custom",
+      "refersTo": "shop-block",
+      "description": "The reference price and the sparkline. Violet wash, shop price, cheapest marketplace as the stroke.",
+      "html": "<div class=\"ds-shop\"><div><div class=\"ds-shop-l\">Mein Shop</div><div class=\"ds-shop-v\">39,95 €</div></div><svg class=\"ds-spark\" viewBox=\"0 0 140 36\" width=\"140\" height=\"36\" aria-hidden=\"true\"><line x1=\"0\" x2=\"140\" y1=\"10\" y2=\"10\" stroke=\"#5c6370\" stroke-dasharray=\"3 3\" stroke-width=\"1\"/><path d=\"M0 22 L40 24 L80 18 L140 30\" fill=\"none\" stroke=\"#e5484d\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/></svg></div>",
+      "css": ".ds-shop { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; background: #ececfe; border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #0b0b0f; max-width: 320px; } .ds-shop-l { font-size: 11.5px; font-weight: 650; color: #5b5bf6; } .ds-shop-v { font-size: 22px; font-weight: 680; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; } .ds-spark { width: 46%; min-width: 120px; }"
+    },
+    {
+      "name": "Gap pill",
+      "kind": "chip",
+      "refersTo": "pill-undercut",
+      "description": "Percent gap against the shop. Red under, green over, mute inside ±0.05% or missing.",
+      "html": "<div class=\"ds-pills\"><span class=\"ds-pill ds-pill-r\">−24,9 %</span><span class=\"ds-pill ds-pill-g\">+5,0 %</span><span class=\"ds-pill ds-pill-n\">–</span></div>",
+      "css": ".ds-pills { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; display: flex; gap: 8px; } .ds-pill { font-size: 12px; font-weight: 650; padding: 2px 8px; border-radius: 99px; text-align: center; font-variant-numeric: tabular-nums; } .ds-pill-r { color: #e5484d; background: #fdecec; } .ds-pill-g { color: #1f7a45; background: #e6f6ec; } .ds-pill-n { color: #5c6370; background: #f1f1f4; }"
+    },
+    {
+      "name": "Undercut note",
+      "kind": "custom",
+      "refersTo": "note-undercut",
+      "description": "The sentence under the rows. Darker ink on the wash, not the pill color.",
+      "html": "<div class=\"ds-note\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 9l6 6 6-6\"/></svg><span>Otto ist 24,9 % günstiger als dein Shop</span></div>",
+      "css": ".ds-note { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; font-size: 12px; font-weight: 550; padding: 7px 10px; border-radius: 9px; display: flex; gap: 6px; align-items: flex-start; background: #fdecec; color: #9f1239; max-width: 360px; } .ds-note svg { flex: none; margin-top: 2px; }"
+    },
+    {
+      "name": "Product card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Photo, name, shop block, one row per marketplace, and the undercut sentence.",
+      "html": "<article class=\"ds-card\"><div class=\"ds-top\"><div class=\"ds-img\"></div><div><div class=\"ds-nm\">Enge Boxershorts 3er-Pack</div><div class=\"ds-sku\">SCH-175983-805</div><div class=\"ds-url\">shop.schiesser.com/products/en…</div></div></div><div class=\"ds-shop\"><div><div class=\"ds-shop-l\">Mein Shop</div><div class=\"ds-shop-v\">39,95 €</div></div><svg class=\"ds-spark\" viewBox=\"0 0 140 36\" width=\"140\" height=\"36\" aria-hidden=\"true\"><line x1=\"0\" x2=\"140\" y1=\"8\" y2=\"8\" stroke=\"#5c6370\" stroke-dasharray=\"3 3\" stroke-width=\"1\"/><path d=\"M0 20 L70 22 L140 30\" fill=\"none\" stroke=\"#e5484d\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/></svg></div><div class=\"ds-row\"><span class=\"ds-n\"><i style=\"background:#d4002a\"></i>Otto</span><b>29,99 €</b><span class=\"ds-pill ds-pill-r\">−24,9 %</span></div><div class=\"ds-note\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 9l6 6 6-6\"/></svg><span>Otto ist 24,9 % günstiger als dein Shop</span></div></article>",
+      "css": ".ds-card { font-family: Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif; background: #fff; border: 1px solid #e7e7eb; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(16,16,24,.04), 0 8px 24px rgba(16,16,24,.06); color: #0b0b0f; display: flex; flex-direction: column; gap: 10px; max-width: 320px; text-align: left; } @media (prefers-reduced-motion: no-preference) { .ds-card { transition: transform .18s cubic-bezier(.2,.7,.2,1), border-color .18s; } .ds-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, #5b5bf6 40%, #e7e7eb); } } .ds-top { display: flex; gap: 12px; } .ds-img { width: 76px; height: 76px; flex: none; border-radius: 12px; background: #fff; border: 1px solid #e7e7eb; } .ds-nm { font-weight: 620; font-size: 13.5px; line-height: 1.3; } .ds-sku { color: #5c6370; font-size: 11.5px; margin-top: 2px; font-variant-numeric: tabular-nums; } .ds-url { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; color: #5c6370; } .ds-shop { background: #ececfe; border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; } .ds-shop-l { font-size: 11.5px; font-weight: 650; color: #5b5bf6; } .ds-shop-v { font-size: 22px; font-weight: 680; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; } .ds-spark { width: 46%; min-width: 120px; height: 36px; } .ds-row { display: grid; grid-template-columns: 1fr auto 78px; gap: 8px; align-items: center; font-size: 12.5px; font-variant-numeric: tabular-nums; } .ds-n { display: flex; align-items: center; gap: 6px; } .ds-n i { width: 7px; height: 7px; border-radius: 50%; display: block; } .ds-pill { font-size: 12px; font-weight: 650; padding: 2px 8px; border-radius: 99px; text-align: center; } .ds-pill-r { color: #e5484d; background: #fdecec; } .ds-note { font-size: 12px; font-weight: 550; padding: 7px 10px; border-radius: 9px; display: flex; gap: 6px; align-items: flex-start; background: #fdecec; color: #9f1239; } .ds-note svg { flex: none; margin-top: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Shop Bench",
+    "overview": "Price Radar is a light operate dashboard. The own shop price is the bench on every product card: a violet wash holds that price beside a small sparkline, marketplace rows sit under it as gaps, and a tinted sentence names the undercut. The ground is a cool grey, cards are white with a hairline and one soft shadow, and the loud color is the gap itself. Red means a marketplace is cheaper. Green means the shop is. Marketplace hues stay on the series dot and the chart stroke.\n\nThe page is a scan, dense and quiet. One sans, Inter, with the system stack behind it when Inter is not installed. Figures are tabular, in German formats. `color-scheme` is light. There is no dark theme.\n\nThe card does the job without a chart. The history chart opens in a side panel. The product photo sits in a rounded frame with the name beside it, and it carries no caption.",
+    "keyCharacteristics": [
+      "Cool grey ground, white cards, one shared soft shadow",
+      "Violet marks the shop; red and green mark the gap",
+      "Marketplace hues stay on the series, each with its own dash",
+      "Inter at 14px, tabular prices and percents, German formats",
+      "Shop block, marketplace rows, and the undercut sentence are the card"
+    ],
+    "rules": [
+      {
+        "name": "The Shop Bench Rule",
+        "body": "Violet is the own shop: the block, the chart series, the reference cell, and text links. Marketplace hues never color it, and violet never means \"cheaper\" or \"failed.\"",
+        "section": "colors"
+      },
+      {
+        "name": "The Gap Rule",
+        "body": "A gap under −0.05% is Undercut Red. A gap over +0.05% is Shop Green. Inside that band the pill is Mute Slate on Soft Fill. A missing or failed price is a dash, never a guessed number. The sentence uses Undercut Ink or Green Ink, not the pill color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Series Rule",
+        "body": "A marketplace keeps one hue and one dash on every card and on the chart. Amazon Amber and Fetch Amber stay different colors.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Face Rule",
+        "body": "Inter is the face. The system stack is only the fallback. Monospace is for the shop URL, because it is an identifier, and for nothing else.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Prices, percents, SKUs, and dates set tabular numerals. Money uses a German format with two fraction digits and a trailing €. Percents use one fraction digit, a leading + when the marketplace is dearer, a true minus (−) when it is cheaper, and ± inside the flat band.",
+        "section": "typography"
+      },
+      {
+        "name": "The Scan Grid Rule",
+        "body": "Product cards flow at a 300px minimum, 14px apart, inside the 1360px column. Below 600px they stack, and the filter bar scrolls sideways instead of wrapping.",
+        "section": "layout"
+      },
+      {
+        "name": "The Resting Shadow Rule",
+        "body": "Cards, KPIs, and panel boxes share the resting shadow. Menus, tooltips, and the panel use their own deeper shadow. Do not invent a second resting shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Bar Blur Rule",
+        "body": "The only backdrop blur is the sticky filter bar: the ground at 88% over transparent, blurred 10px. Cards stay opaque.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Soft Corner Rule",
+        "body": "16px for the card, 12px for an inset block, 9px for a control, full round for a gap pill. Do not square the cards, and do not round the page itself.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Sparkline Rule",
+        "body": "On the card, the sparkline is the cheapest marketplace, colored by the gap, and the dashed mute line is the shop price. On the panel chart, the shop series is the violet stroke and each marketplace keeps its own hue and dash.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do keep the ground cool grey and the cards white, with the shared resting shadow.",
+      "Do measure every marketplace price against the shop price, and show the gap as red, green, or mute.",
+      "Do keep each marketplace on its fixed hue and dash, on the row dot and on the chart.",
+      "Do show a missing or failed price as missing: a dash in the pill, and a mute or amber note. Never a filled-in number.",
+      "Do draw icons as stroke SVGs in `currentColor`, at stroke 2 or 2.2.",
+      "Do use the violet focus ring (2px outline, 2px offset) and the violet selection wash."
+    ],
+    "donts": [
+      "Don't add a dark theme. The page sets light `color-scheme` only.",
+      "Don't color buttons, notes, KPI chrome, or the page ground with a marketplace hue.",
+      "Don't replace the shop block, the rows, and the undercut sentence with a chart on the card. The history chart belongs in the panel.",
+      "Don't introduce a second display face. Inter is first; the system stack is the fallback.",
+      "Don't caption the product photo. The name sits beside the frame.",
+      "Don't use emoji or a unicode bullet as an icon. Icons are stroke SVGs."
+    ]
+  }
+}

@@ -1,5 +1,12 @@
-sku,ean,name,own_price_eur
-DEMO-001,,adidas Stan Smith white/core black,89.90
-DEMO-002,,adidas Stan Smith white/green,115.00
-DEMO-003,,adidas Stan Smith white/crystal sky,105.00
-SCH-173983-803,,Schiesser 95/5 Organic Cotton Shorts 3er-Pack Webgummibund dunkelblau (173983-803),39.95
+sku,ean,name,own_price_eur,shop_url,image_url
+205221-000,,Slip 3er-Pack Schwarz - Essentials,29.95,https://shop.schiesser.com/products/slip-3er-pack-schwarz-essentials-205221-000,https://shop.schiesser.com/cdn/shop/files/205221-000_detail1_5d8c52a6-0649-46e3-bc05-6f456254fc7b.png?v=1776669704
+205144-100,,Unterhemd Feinripp 2er-Pack Weiss - Essentials,24.95,https://shop.schiesser.com/products/unterhemd-feinripp-2er-pack-weiss-essentials-205144-100,https://shop.schiesser.com/cdn/shop/files/205144-100_detail1_5857be39-914c-4f04-af92-45610e7eb46f.png?v=1776669703
+205222-803,,Enge Boxershorts 2er-Pack Dunkelblau - Essentials,29.95,https://shop.schiesser.com/products/enge-boxershorts-2er-pack-dunkelblau-essentials-205222-803,https://shop.schiesser.com/cdn/shop/files/205222-803_detail1_d92868e2-f386-4b42-ad8f-73e763f18639.png?v=1776669704
+205159-100,,Slip Feinripp mit Eingriff 2er-Pack Weiss - Essentials Feinripp,24.95,https://shop.schiesser.com/products/slip-feinripp-mit-eingriff-2er-pack-weiss-essentials-feinripp-205159-100,https://shop.schiesser.com/cdn/shop/files/205159-100_front_82050d46-1bfb-4ecf-a4e1-6264c132bcec.png?v=1781673098
+183216-931,,Slip 5er-Pack Dunkelblau - 95/5,54.95,https://shop.schiesser.com/products/slip-5er-pack-dunkelblau-95-5-183216-931,https://shop.schiesser.com/cdn/shop/files/183216-931_front.png?v=1778406141
+205172-100,,Unterhemd Doppelripp 2er-Pack Weiss - Essentials,24.95,https://shop.schiesser.com/products/unterhemd-doppelripp-2er-pack-weiss-essentials-205172-100,https://shop.schiesser.com/cdn/shop/files/205172-100_detail1_932f70cd-4194-4899-acb3-221b225fbbc0.png?v=1776669704
+205145-100,,T-Shirt Feinripp Weiss - Essentials,19.95,https://shop.schiesser.com/products/t-shirt-feinripp-weiss-essentials-205145-100,https://shop.schiesser.com/cdn/shop/files/205145-100_front_a098fcc7-f9bf-4472-a76c-cdbabfd95c51.png?v=1776669703
+183243-908,,Enge Boxershorts 3er-Pack Dunkelblau - 95/5,39.95,https://shop.schiesser.com/products/enge-boxershorts-3er-pack-dunkelblau-95-5-183243-908,https://shop.schiesser.com/cdn/shop/files/183243-908_detail1_58e12e07-6645-4398-805e-a301fb26509f.png?v=1776757316
+183989-214,,Schlafanzug Blau/Grau gemustert - 95/5,69.95,https://shop.schiesser.com/products/schlafanzug-blau-grau-gemustert-95-5-183989-214,https://shop.schiesser.com/cdn/shop/files/183989-214_front.png?v=1778409097
+183994-860,,Schlafanzug mit Bündchen Grau/Blau - 95/5,69.95,https://shop.schiesser.com/products/schlafanzug-mit-buendchen-grau-blau-95-5-183994-860,https://shop.schiesser.com/cdn/shop/files/183994-860_front.png?v=1778409715
+SCH-173983-803,,Enge Boxershorts 3er-Pack Dunkelblau - 95/5 (173983-803),39.95,https://shop.schiesser.com/products/enge-boxershorts-3er-pack-dunkelblau-95-5-173983-803,https://shop.schiesser.com/cdn/shop/files/173983-803_detail1_150fc384-54f0-4eae-a461-614c1991829b.png?v=1776753128
