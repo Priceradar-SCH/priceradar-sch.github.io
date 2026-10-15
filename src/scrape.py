@@ -21,6 +21,9 @@ import parse
 FIRECRAWL_ENDPOINT = "https://api.firecrawl.dev/v2/scrape"
 MAX_PAGES_PER_RUN = int(os.environ.get("MAX_PAGES_PER_RUN", "200"))
 REQUEST_PAUSE_S = 2
+# Marketplaces whose product pages answer a plain fetch with a JSON-LD price.
+# They are read directly first and only fall back to Firecrawl on failure.
+DIRECT_MARKETPLACES = {"galeria"}
 
 
 def load_env():
@@ -129,6 +132,18 @@ def record(conn, match, page):
     return True
 
 
+def direct_fetch(match):
+    """Page dict from a plain fetch, or None when the marketplace needs Firecrawl
+    or the plain fetch did not yield a price."""
+    if match["marketplace"] not in DIRECT_MARKETPLACES:
+        return None
+    try:
+        page = parse.page_from_html(fetch_html(match["url"]))
+    except (urllib.error.URLError, TimeoutError):
+        return None
+    return page if parse.extract(page)["price"] is not None else None
+
+
 def run_live(conn):
     api_key = os.environ.get("FIRECRAWL_API_KEY")
     if not api_key:
@@ -139,7 +154,7 @@ def run_live(conn):
     ok = 0
     for match in matches:
         try:
-            page = firecrawl_fetch(match["url"], api_key)
+            page = direct_fetch(match) or firecrawl_fetch(match["url"], api_key)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             db.add_snapshot(conn, match["id"], None, None, None, "none", f"fetch error: {exc}")
             print(f"  FAIL  {match['sku']} @ {match['marketplace']}: {exc}")
