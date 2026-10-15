@@ -85,7 +85,7 @@ def fetch_html(url):
 def refresh_shops(conn):
     """Read each active product's own shop page and store price + og:image.
 
-    The shop (Shopify) answers a normal fetch and carries og:price:amount and
+    www.schiesser.com answers a normal fetch and carries a JSON-LD price and
     og:image, so this does not spend a Firecrawl credit. A failed fetch leaves
     the CSV price and image in place.
     """

@@ -12,7 +12,7 @@ Existing codebase: Python stdlib, SQLite, a self-contained `dashboard.html` (inl
 
 ## Users
 
-Inferred from the request and README: the shop owner (Schiesser, shop.schiesser.com) checking, in one sitting, where German marketplaces undercut the own shop so they can adjust prices.
+Inferred from the request and README: the shop owner (Schiesser, www.schiesser.com) checking, in one sitting, where German marketplaces undercut the own shop so they can adjust prices.
 
 ## Product Purpose
 

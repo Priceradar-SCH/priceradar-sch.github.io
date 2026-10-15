@@ -1,6 +1,6 @@
 # Pricing Tool
 
-Tracks the prices of shop.schiesser.com products across marketplaces, stores a
+Tracks the prices of www.schiesser.com products across marketplaces, stores a
 daily price history in SQLite, and renders a self-contained HTML dashboard.
 Pure Python stdlib + the Firecrawl scrape API. No AI/LLM anywhere in the running
 pipeline — price extraction is deterministic (JSON-LD / meta tags).
@@ -38,7 +38,7 @@ a price from obtainable HTML. A blocked page was not given a guessed price.
 
 | Source | Parser | In this catalog |
 |---|---|---|
-| shop.schiesser.com | Works on a normal fetch. `og:price:amount` and `og:image`. All 11 shop pages returned the CSV price on 2026-10-14. | Every active product. |
+| www.schiesser.com | Own shop since 2026-10-15 (replaced shop.schiesser.com). Works on a normal fetch: JSON-LD price and `og:image`. `index.php?cl=search&searchparam=<article-colour>` redirects to the product page. All 11 pages returned the CSV price on 2026-10-15. | Every active product. |
 | `otto` | Historical Firecrawl runs extract JSON-LD. A direct product fetch is blocked (HTTP 400). The parser was not re-run on the new Otto URL. | `SCH-173983-803` keeps its existing URL (priced through 2026-10-08; the 2026-10-14 run failed with Firecrawl HTTP 402). `205221-000` adds `C1035381198`, matched by the Otto search title to the idealo offer title. |
 | `galeria` | Product pages answer a plain fetch with a JSON-LD price, so the scraper reads them directly and only falls back to Firecrawl on failure. URLs end in the EAN; `galeria.de/produkt/schiesser-<EAN>` redirects to the product. | `SCH-173983-803`, `205222-803`, `205145-100`, `183989-214`, `183994-860`, `205159-100`, each matched by a variant EAN from the own shop. |
 | `amazon` | Direct `/dp/` fetch returns 503, so pages come through Firecrawl. Amazon has no price meta tags or JSON-LD; the parser reads the buy-box JSON (`source=amazon`, verified 2026-10-15). Pages that only show a size/colour price range stay unpriced. | Four `/dp/` URLs: `205144-100` B012CR2JQ6, `205172-100` B00HQTQCK0, `183216-931` B0D79WQC9C (183216 5-pack, colour `-931` not confirmed), `183243-908` B0G34NXB6F (page shows colour 909 by default). |
@@ -57,7 +57,7 @@ is the article that was already being scraped.
   It is a different article from `183243-908`: both are "Enge Boxershorts 3er-Pack
   Dunkelblau - 95/5" at 39.95 EUR, but the shop barcodes differ
   (`4007065791955` is size 5 of 173983-803; `183243-908` starts at `4007067085311`).
-  The shop URL is `https://shop.schiesser.com/products/enge-boxershorts-3er-pack-dunkelblau-95-5-173983-803`.
+  The shop URL is `https://www.schiesser.com/herrenbekleidung-unterwaesche-shorts-shorts-3er-pack-webgummibund-dunkelblau-95-5.html`.
   The Otto slug still says "6er-pack"; the stored URL is unchanged because its
   JSON-LD `gtin13` 4007065792037 is size 7 of this article.
 - `183243-908` is the new-list article and is not merged into `SCH-173983-803`.
