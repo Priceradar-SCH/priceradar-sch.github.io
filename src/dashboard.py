@@ -268,7 +268,7 @@ JS = r"""
     ext: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9"/><path d="M10 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/></svg>'
   };
   var RANGES = { "1W": 7, "1M": 30, "3M": 90, "6M": 180, "12M": 365 };
-  var S = { m: "Alle", s: "Alle", sort: "dev", r: 30, view: "grid" };
+  var S = { sort: "dev", r: 30, view: "grid" };
   var DR = 90;
   var openSku = null;
   var eur = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -374,16 +374,16 @@ JS = r"""
     var worst = withPrice.reduce(function (a, p) { return !a || devOf(p) < devOf(a) ? p : a; }, null);
     var longN = all.filter(expensiveLong).length;
     var cards = [
-      ["Marktplatz günstiger als dein Shop",
+      ["Von Marktplätzen unterboten",
         under.length + ' <span style="font-size:15px;color:var(--mut);font-weight:500">von ' + all.length + "</span>",
-        '<span style="color:var(--red)">' + (all.length ? Math.round(under.length / all.length * 100) : 0) + " %</span> deines Sortiments unterboten"],
+        '<span style="color:var(--red)">' + (all.length ? Math.round(under.length / all.length * 100) : 0) + " %</span> des Sortiments"],
       ["Ø Abstand bester Marktplatz",
         avg == null ? "–" : '<span style="color:' + (avg < 0 ? "var(--red)" : "var(--grn)") + '">' + pct(avg) + "</span>",
-        withPrice.length ? "gegenüber deinem Shop-Preis" : "noch kein Marktplatzpreis"],
+        withPrice.length ? "über " + withPrice.length + " Artikel mit Marktplatzpreis" : "noch kein Marktplatzpreis"],
       ["Größte Unterbietung",
         worst && devOf(worst) < -0.05 ? '<span style="color:var(--red)">' + pct(devOf(worst)) + "</span>" : "–",
-        worst && devOf(worst) < -0.05 ? esc(bestOf(worst).series.label) + ": " + esc(worst.name.split(",")[0]) : "kein Marktplatz unter deinem Shop"],
-      ["Shop teurer seit > 7 Tagen", String(longN), "Kandidaten für Preisanpassung"]
+        worst && devOf(worst) < -0.05 ? esc(bestOf(worst).series.label) + ": " + esc(worst.name.split(",")[0]) : "kein Marktplatz günstiger"],
+      ["Seit über 7 Tagen unterboten", String(longN), "Kandidaten für Preisanpassung"]
     ];
     document.getElementById("kpis").innerHTML = cards.map(function (c) {
       return '<div class="kpi"><div class="l">' + c[0] + '</div><div class="v num">' + c[1] + '</div><div class="h">' + c[2] + "</div></div>";
@@ -428,7 +428,7 @@ JS = r"""
       var failed = p.series.some(function (s) { return s.lastError; });
       var warn = failed ? " · letzter Abruf ohne neuen Preis" : "";
       var shown = gap.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-      return '<div class="note r">' + ICO.chev + "<span>" + esc(mx.label) + " ist " + shown + " % günstiger als dein Shop" + extra + warn + "</span></div>";
+      return '<div class="note r">' + ICO.chev + "<span>" + esc(mx.label) + " ist " + shown + " % günstiger" + extra + warn + "</span></div>";
     }
     var priced = p.series.filter(function (s) { return latest(s); });
     var failed = p.series.filter(function (s) { return s.lastError && !latest(s); });
@@ -436,8 +436,8 @@ JS = r"""
     if (!priced.length && failed.length) return '<div class="note a">Letzter Abruf fehlgeschlagen' + (failed[0].lastRun ? " (" + esc(failed[0].lastRun.split("-").reverse().join(".")) + ")" : "") + "</div>";
     if (!priced.length) return '<div class="note n">Noch kein Marktplatzpreis</div>';
     var dearer = priced.some(function (s) { return latest(s)[1] > p.own + 0.005; });
-    if (!dearer) return '<div class="note n">Gleicher Preis wie in deinem Shop</div>';
-    return '<div class="note g">Dein Shop ist am günstigsten</div>';
+    if (!dearer) return '<div class="note n">Gleicher Preis wie auf den Marktplätzen</div>';
+    return '<div class="note g">Am günstigsten</div>';
   }
 
   function rowHtml(p) {
@@ -459,20 +459,8 @@ JS = r"""
   var VIEW = [];
   function render() {
     kpis();
-    var list = DATA.products.filter(function (p) {
-      if (S.m !== "Alle" && !p.series.some(function (s) { return s.label === S.m || s.marketplace === S.m; })) return false;
-      var st = statusOf(p);
-      if (S.s === "Fehler") return st === "Scrape-Fehler" || st === "Nicht verfügbar";
-      if (S.s !== "Alle" && st !== S.s) return false;
-      return true;
-    });
-    var mkey = S.m;
-    function priceFor(p) {
-      if (mkey === "Alle") { var b = bestOf(p); return b ? b.price : Infinity; }
-      var s = p.series.filter(function (x) { return x.label === mkey; })[0];
-      var pt = s && latest(s);
-      return pt ? pt[1] : Infinity;
-    }
+    var list = DATA.products.slice();
+    function priceFor(p) { var b = bestOf(p); return b ? b.price : Infinity; }
     var sorters = {
       dev: function (a, b) { return Math.abs(devOf(b) || 0) - Math.abs(devOf(a) || 0); },
       price: function (a, b) { return priceFor(a) - priceFor(b); },
@@ -605,7 +593,7 @@ JS = r"""
     p.series.forEach(function (s) {
       links += '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">Bei ' + esc(s.label) + " öffnen " + ICO.ext + "</a>";
     });
-    var ids = "SKU " + esc(p.sku) + (p.ean ? " · EAN " + esc(p.ean) : "") + ' · Dein Preis <b style="color:var(--fg)">' + fmt(p.own) + "</b>";
+    var ids = "SKU " + esc(p.sku) + (p.ean ? " · EAN " + esc(p.ean) : "") + ' · Shop-Preis <b style="color:var(--fg)">' + fmt(p.own) + "</b>";
     var cmp = '<div class="me"><div class="h" style="color:var(--acc);font-weight:650">Mein Shop</div><div class="v">' + fmt(p.own) + '</div><div class="at">Referenz</div></div>';
     cmp += p.series.map(function (s) {
       var pt = latest(s);
@@ -703,9 +691,6 @@ JS = r"""
     if (x === "pdf") window.print();
   };
 
-  var mpLabels = ["Alle"].concat(DATA.marketplaces.map(function (m) { return m.label; }));
-  seg("fm", mpLabels, "m");
-  seg("fs", ["Alle", "Günstiger", "Teurer", "Gleich", "Fehler"], "s");
   seg("tr", Object.keys(RANGES), "r", RANGES);
   render();
 })();
@@ -727,7 +712,7 @@ def build():
 <div class="wrap">
 <header>
   <div class="logo" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6-6"/></svg></div>
-  <div><h1>Price Radar</h1><div class="sub">Marktpreise vs. dein Preis</div></div>
+  <div><h1>Price Radar</h1><div class="sub">Shop-Preise im Marktplatz-Vergleich</div></div>
   <div class="sp"></div>
   <div class="stand num"><span class="dot" aria-hidden="true"></span>Stand: """ + data["generated"] + """</div>
   <div class="dd">
@@ -744,8 +729,6 @@ def build():
 </header>
 <section class="kpis" id="kpis" aria-label="Kennzahlen"></section>
 <div class="bar">
-  <div class="seg" id="fm" role="group" aria-label="Marktplatz"></div>
-  <div class="seg" id="fs" role="group" aria-label="Status"></div>
   <div class="sp hide-m"></div>
   <label class="hide-m" style="position:absolute;width:1px;height:1px;overflow:hidden">Sortierung</label>
   <select id="sort" aria-label="Sortierung">
@@ -758,7 +741,7 @@ def build():
   <div class="seg" id="view" role="group" aria-label="Ansicht"><button type="button" class="on" data-v="grid" title="Raster" aria-label="Raster" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5"/><rect x="13.5" y="4" width="6.5" height="6.5"/><rect x="4" y="13.5" width="6.5" height="6.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5"/></svg></button><button type="button" data-v="list" title="Liste" aria-label="Liste" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11M4 7h.01M4 12h.01M4 17h.01"/></svg></button></div>
 </div>
 <main class="grid" id="grid"></main>
-<p class="foot">Rot heißt: der Marktplatz ist günstiger als dein Shop. Grün heißt: dein Shop ist günstiger. Die gestrichelte Linie in der Sparkline ist dein Shop-Preis. Preise sind der niedrigste je Tag erfasste Wert.</p>
+<p class="foot">Rot: ein Marktplatz ist günstiger als der Shop. Grün: der Shop ist am günstigsten. Die gestrichelte Linie in der Sparkline ist der Shop-Preis. Preise sind der niedrigste je Tag erfasste Wert.</p>
 </div>
 <div class="ov" id="ov"><div class="panel" id="panel" role="dialog" aria-modal="true" aria-label="Produktdetail"></div></div>
 <script>window.__PRICE_DATA__ = """ + payload + """;</script>
