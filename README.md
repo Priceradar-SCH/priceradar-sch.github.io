@@ -80,7 +80,7 @@ python3 src/scrape.py && python3 src/dashboard.py
 ## Dashboard & export
 
 Live dashboard (GitHub Pages, republished by every daily run):
-**https://dynamicdolphino.github.io/price-radar/**
+**https://priceradar-sch.github.io/**
 
 `src/dashboard.py` writes a single self-contained `dashboard.html` (inline CSS +
 vanilla JS, no external assets, light theme only):
