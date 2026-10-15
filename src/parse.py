@@ -3,7 +3,7 @@
 Extraction order per page:
   1. Firecrawl metadata (og/twitter/product meta tags) — covers Zalando
   2. JSON-LD <script type="application/ld+json"> Product/Offer blocks
-  3. (later) per-domain regex fallbacks registered in DOMAIN_FALLBACKS
+  3. Amazon buy-box JSON (Amazon has neither price meta tags nor JSON-LD)
 """
 import html as htmllib
 import json
@@ -86,6 +86,33 @@ def from_jsonld(html):
     return None, None, None
 
 
+def from_amazon(html):
+    """-> (price, available) or (None, None).
+
+    Amazon keeps the buy-box price of the variant the page shows in a hidden
+    JSON div. Pages that only show a size/colour price range have no buy box,
+    and they stay without a price rather than picking one end of the range.
+    """
+    m = re.search(r"twister-plus-buying-options-price-data\"[^>]*>\s*(\{.*?\})\s*</div>",
+                  html, re.S)
+    if not m:
+        return None, None
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return None, None
+    for offer in data.get("desktop_buybox_group_1") or []:
+        price = parse_price_str(offer.get("priceAmount"))
+        if price is None:
+            continue
+        status = re.search(r"id=\"availability\" class=\"a-section[^>]*>(.*?)</div>", html, re.S)
+        available = None
+        if status:
+            available = "nicht verfügbar" not in re.sub(r"<[^>]+>", " ", status.group(1))
+        return price, available
+    return None, None
+
+
 def _meta_map(html):
     meta = {}
     for tag in re.findall(r"<meta\b[^>]*>", html or "", re.I):
@@ -139,4 +166,8 @@ def extract(page):
     if jl_price is not None:
         return {"price": jl_price, "currency": jl_currency,
                 "available": jl_available, "source": "jsonld"}
+    amz_price, amz_available = from_amazon(html)
+    if amz_price is not None:
+        return {"price": amz_price, "currency": "EUR",
+                "available": amz_available, "source": "amazon"}
     return {"price": None, "currency": None, "available": None, "source": "none"}
