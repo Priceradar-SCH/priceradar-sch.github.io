@@ -373,7 +373,7 @@ The side panel is a dialog on the scrim, up to 880px wide, Cool Ground, hairline
 
 ### Shop block
 
-The signature. Violet Wash, radius 12px, padding 10px 12px. The reference name is Signal Violet at 11.5px / 650. The price is the headline figure, tabular. The sparkline takes about 46% of the row, at least 120px wide. It plots the cheapest marketplace in the selected range: stroke 1.6px, Undercut Red, Shop Green, or Mute Slate by The Gap Rule. The shop price on that spark is a muted dashed line (`3 3`), not the violet chart stroke. With fewer than two points the spark reads "noch kein Verlauf."
+The signature. Violet Wash, radius 12px, padding 10px 12px. The reference name is Signal Violet at 11.5px / 650. The price is the headline figure, tabular. The sparkline takes about 46% of the row, at least 120px wide. It plots every marketplace in the selected range, each at stroke 1.6px in that series' hue and dash (the same as the row dots and the panel chart). The shop price on that spark is a muted dashed line (`3 3`), not the violet chart stroke, so it stays quiet on the Violet Wash beside the shop figure. With fewer than two points on any marketplace the spark reads "noch kein Verlauf."
 
 ### Undercut note
 
@@ -389,7 +389,7 @@ Lives in the panel, not on the card. Marketplace strokes are 2px in the series h
 
 ### Named Rules
 
-**The Sparkline Rule.** On the card, the sparkline is the cheapest marketplace, colored by the gap, and the dashed mute line is the shop price. On the panel chart, the shop series is the violet stroke and each marketplace keeps its own hue and dash.
+**The Sparkline Rule.** On the card, the sparkline shows every marketplace in its series hue and dash, time-aligned, and the dashed mute line is the shop price. On the panel chart, the shop series is the violet stroke and each marketplace keeps the same hue and dash.
 
 ## Do's and Don'ts
 
