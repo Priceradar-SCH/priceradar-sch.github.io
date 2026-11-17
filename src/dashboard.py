@@ -396,27 +396,35 @@ JS = r"""
   }
 
   function sparkSvg(p) {
-    var b = bestOf(p);
-    if (!b) return '<div class="cap">noch kein Verlauf</div>';
-    var a = pointsIn(b.series, S.r);
-    if (a.length < 2) return '<div class="cap">noch kein Verlauf</div>';
+    var series = p.series.map(function (s) {
+      return { s: s, pts: pointsIn(s, S.r) };
+    }).filter(function (s) { return s.pts.length >= 2; });
+    if (!series.length) return '<div class="cap">noch kein Verlauf</div>';
     var w = 140, h = 36;
-    var vals = a.map(function (pt) { return pt[1]; });
-    if (p.own) vals.push(p.own);
+    var vals = [], times = [];
+    series.forEach(function (s) {
+      s.pts.forEach(function (pt) { vals.push(pt[1]); times.push(parse(pt[0])); });
+    });
+    if (p.own != null) vals.push(p.own);
     var mn0 = Math.min.apply(null, vals), mx0 = Math.max.apply(null, vals);
     var pd = (mx0 - mn0) * 0.25 || 1;
     var mn = mn0 - pd, mx = mx0 + pd;
-    var xAt = function (i) { return i / (a.length - 1) * w; };
+    var t0 = Math.min.apply(null, times), t1 = Math.max.apply(null, times);
+    if (t1 === t0) t1 = t0 + DAY;
+    var xAt = function (t) { return (t - t0) / (t1 - t0) * w; };
     var yAt = function (v) { return h - (v - mn) / (mx - mn || 1) * h; };
-    var d = a.map(function (pt, i) { return (i ? "L" : "M") + xAt(i).toFixed(1) + " " + yAt(pt[1]).toFixed(1); }).join("");
-    var dev = p.own ? (b.price - p.own) / p.own * 100 : 0;
-    var c = dev < -0.05 ? "var(--red)" : dev > 0.05 ? "var(--grn)" : "var(--mut)";
     var own = "";
-    if (p.own) {
+    if (p.own != null) {
       var oy = Math.max(1, Math.min(h - 1, yAt(p.own)));
       own = '<line x1="0" x2="' + w + '" y1="' + oy + '" y2="' + oy + '" stroke="var(--mut)" stroke-dasharray="3 3" stroke-width="1"/>';
     }
-    return '<svg viewBox="0 0 ' + w + " " + h + '" width="100%" height="' + h + '" preserveAspectRatio="none" aria-hidden="true">' + own + '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>';
+    var lines = series.map(function (s) {
+      var d = s.pts.map(function (pt, i) {
+        return (i ? "L" : "M") + xAt(parse(pt[0])).toFixed(1) + " " + yAt(pt[1]).toFixed(1);
+      }).join("");
+      return '<path d="' + d + '" fill="none" stroke="' + s.s.color + '" stroke-width="1.6" stroke-dasharray="' + s.s.dash + '" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>';
+    }).join("");
+    return '<svg viewBox="0 0 ' + w + " " + h + '" width="100%" height="' + h + '" preserveAspectRatio="none" aria-hidden="true">' + own + lines + "</svg>";
   }
 
   function noteHtml(p) {
@@ -741,7 +749,7 @@ def build():
   <div class="seg" id="view" role="group" aria-label="Ansicht"><button type="button" class="on" data-v="grid" title="Raster" aria-label="Raster" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5"/><rect x="13.5" y="4" width="6.5" height="6.5"/><rect x="4" y="13.5" width="6.5" height="6.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5"/></svg></button><button type="button" data-v="list" title="Liste" aria-label="Liste" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 7h11M9 12h11M9 17h11M4 7h.01M4 12h.01M4 17h.01"/></svg></button></div>
 </div>
 <main class="grid" id="grid"></main>
-<p class="foot">Rot: ein Marktplatz ist günstiger als der Shop. Grün: der Shop ist am günstigsten. Die gestrichelte Linie in der Sparkline ist der Shop-Preis. Preise sind der niedrigste je Tag erfasste Wert.</p>
+<p class="foot">Rot: ein Marktplatz ist günstiger als der Shop. Grün: der Shop ist am günstigsten. Die gestrichelte Linie in der Sparkline ist der Shop-Preis, die farbigen Linien sind die Marktplätze (gleiche Farben wie in der Legende). Preise sind der niedrigste je Tag erfasste Wert.</p>
 </div>
 <div class="ov" id="ov"><div class="panel" id="panel" role="dialog" aria-modal="true" aria-label="Produktdetail"></div></div>
 <script>window.__PRICE_DATA__ = """ + payload + """;</script>
