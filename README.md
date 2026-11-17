@@ -42,7 +42,7 @@ a price from obtainable HTML. A blocked page was not given a guessed price.
 | `otto` | Historical Firecrawl runs extract JSON-LD. A direct product fetch is blocked (HTTP 400). The parser was not re-run on the new Otto URL. | `SCH-173983-803` keeps its existing URL (priced through 2026-10-08; the 2026-10-14 run failed with Firecrawl HTTP 402). `205221-000` adds `C1035381198`, matched by the Otto search title to the idealo offer title. |
 | `galeria` | Product pages answer a plain fetch with a JSON-LD price, so the scraper reads them directly and only falls back to Firecrawl on failure. URLs end in the EAN; `galeria.de/produkt/schiesser-<EAN>` redirects to the product. | `SCH-173983-803`, `205222-803`, `205145-100`, `183989-214`, `183994-860`, `205159-100`, each matched by a variant EAN from the own shop. |
 | `amazon` | Direct `/dp/` fetch returns 503, so pages come through Firecrawl. Amazon has no price meta tags or JSON-LD; the parser reads the buy-box JSON (`source=amazon`, verified 2026-10-15). Pages that only show a size/colour price range stay unpriced. | Four `/dp/` URLs: `205144-100` B012CR2JQ6, `205172-100` B00HQTQCK0, `183216-931` B0D79WQC9C (183216 5-pack, colour `-931` not confirmed), `183243-908` B0G34NXB6F (page shows colour 909 by default). |
-| `zalando` | Parser works (`twitter:data1` when the label is Preis/Price) when HTML is obtainable. Direct fetch is 403. Searches for the ten article numbers did not return those articles. | No new rows. The adidas demo matches are inactive. |
+| `zalando` | Parser works (`twitter:data1` when the label is Preis/Price) when HTML is obtainable. Direct fetch is 403. Searches for the ten article numbers did not return those articles. | First Schiesser rows added 2026-11-17 for `173983-000`, `170364-000` and `170365-000`. The adidas demo matches stay inactive. No Cotton Flex row (see catalog notes). |
 | idealo | Direct fetch is 403. When HTML is available, JSON-LD is one aggregate price, not one price per shop. | Not stored as match URLs. The upload file's marketplace links are idealo pages. |
 | Kaufland, eBay, About You | No usable product HTML (verification wall, 403, or no article hit). | Not added. |
 
@@ -50,8 +50,8 @@ Otto candidates that were **not** added, because the manufacturer number was not
 
 ### Catalog notes
 
-Eleven active products. Ten come from the 2026-10-14 Schiesser list. The eleventh
-is the article that was already being scraped.
+Fifteen active products. Ten come from the 2026-10-14 Schiesser list, one is the
+article that was already being scraped, and four were added on 2026-11-17.
 
 - `SCH-173983-803` stays, with its Otto and Galeria matches and every snapshot.
   It is a different article from `183243-908`: both are "Enge Boxershorts 3er-Pack
@@ -61,6 +61,28 @@ is the article that was already being scraped.
   The Otto slug still says "6er-pack"; the stored URL is unchanged because its
   JSON-LD `gtin13` 4007065792037 is size 7 of this article.
 - `183243-908` is the new-list article and is not merged into `SCH-173983-803`.
+- `173983-000` is the black colourway of the same 95/5 3-pack family as
+  `SCH-173983-803` (manufacturer no. 173983, colour `-000`). Shop price 39.95 EUR
+  and image were read from www.schiesser.com on 2026-11-17. Amazon `B08MV1HD9K`
+  and Zalando `s5982c05d-q11` come from the owner's comparison slide. EAN is left
+  empty (barcodes are per size, as with the rest of the catalog).
+- `183341-000` is Cotton Flex shorts, black, sold in the shop as a **2-pack**
+  (not a 3-pack; a shop search for "Cotton Flex" only lists 2-pack shorts). Shop
+  price 39.95 EUR, confirmed 2026-11-17. Amazon `B0FKBXZP9J` is the multipack
+  listing from the slide. The Zalando URL on the slide was the same 95/5 page as
+  `173983-000` and was **not** stored. No dedicated Cotton Flex page was found
+  on Zalando.de (the "2 PACK" page `s5982a03h-q11` is 95 % cotton / 5 % elastane;
+  Cotton Flex is 85 % cotton / 10 % polyamide / 5 % elastane).
+- `170364-000` is the Invisible Soft microfibre bustier, black, with removable
+  pads, shop price 39.95 EUR. The slide's shop link was a search page; the
+  product URL was resolved via the article-number search. A second black
+  Invisible Soft bustier with the same name and price exists as `179821-000`
+  and was not added; `170364-000` sits in the same article series as the
+  Invisible Soft top `170365-000`. Amazon `B07YF5NMQH` and Zalando
+  `s5981a02j-q11` come from the slide.
+- `170365-000` is the Invisible Soft microfibre camisole (Trägertop), black,
+  with removable pads, shop price 49.95 EUR. Amazon `B07YF5NMRS` and Zalando
+  `s5981a02l-q11` come from the slide.
 - The adidas Stan Smith rows (`DEMO-001`, `DEMO-002`, `DEMO-003`) are `active=0`.
   Their Zalando snapshots stay in `pricing.db` and in the history export. They
   are not on the dashboard and the daily run does not fetch them.
