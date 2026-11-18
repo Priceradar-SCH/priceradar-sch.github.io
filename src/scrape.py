@@ -36,14 +36,25 @@ def load_env():
                 os.environ.setdefault(key.strip(), val.strip())
 
 
-def firecrawl_fetch(url, api_key):
-    payload = json.dumps({
+DEFAULT_LOCATION = {"country": "DE", "languages": ["de-DE"]}
+# Enhanced proxies are not offered in DE; NL is the closest enhanced region
+# that can still request a German-language storefront.
+ENHANCED_LOCATION = {"country": "NL", "languages": ["de-DE"]}
+# Stop spending enhanced credits if this many enhanced retries also soft-block.
+ENHANCED_FAIL_LIMIT = 2
+
+
+def firecrawl_fetch(url, api_key, proxy=None, location=None):
+    body = {
         "url": url,
         "formats": ["rawHtml"],
         "onlyMainContent": False,
         "maxAge": 0,
-        "location": {"country": "DE", "languages": ["de-DE"]},
-    }).encode()
+        "location": location or DEFAULT_LOCATION,
+    }
+    if proxy:
+        body["proxy"] = proxy
+    payload = json.dumps(body).encode()
     req = urllib.request.Request(
         FIRECRAWL_ENDPOINT,
         data=payload,
@@ -116,11 +127,25 @@ def refresh_shops(conn):
 
 
 def record(conn, match, page):
-    result = parse.extract(page)
     status = page.get("metadata", {}).get("statusCode")
+    kind = None
+    if match["marketplace"] == "amazon":
+        kind = parse.amazon_page_kind(page.get("html") or "", page.get("metadata") or {}, match["url"])
+    # Never extract a price from an Amazon homepage / captcha page.
+    if kind == "soft_block":
+        result = {"price": None, "currency": None, "available": None, "source": "none"}
+        error = f"amazon soft-block (http {status}, homepage instead of product)"
+        dump_failure(match, page)
+        db.add_snapshot(conn, match["id"], None, None, None, "none", error)
+        print(f"  FAIL  {match['sku']} @ {match['marketplace']}: {error}")
+        return False
+    result = parse.extract(page)
     error = None
     if result["price"] is None:
-        error = f"no price found (http {status}, source={result['source']})"
+        if kind == "no_buybox":
+            error = f"amazon no buy-box (http {status}, product page without offer JSON)"
+        else:
+            error = f"no price found (http {status}, source={result['source']})"
         dump_failure(match, page)
     db.add_snapshot(conn, match["id"], result["price"], result["currency"],
                     result["available"], result["source"], error)
@@ -144,6 +169,35 @@ def direct_fetch(match):
     return page if parse.extract(page)["price"] is not None else None
 
 
+def retry_amazon_if_soft_blocked(match, page, api_key, enhanced_failures):
+    """If Amazon served a homepage, retry once with an enhanced proxy.
+
+    Returns (page, enhanced_failures). A circuit breaker stops further enhanced
+    retries once ENHANCED_FAIL_LIMIT of them have also come back as a soft-block.
+    """
+    kind = parse.amazon_page_kind(page.get("html") or "", page.get("metadata") or {}, match["url"])
+    if kind != "soft_block":
+        return page, enhanced_failures
+    if enhanced_failures >= ENHANCED_FAIL_LIMIT:
+        print(f"  skip  {match['sku']} @ amazon: enhanced retry circuit breaker")
+        return page, enhanced_failures
+    print(f"  retry {match['sku']} @ amazon: soft-block, trying enhanced proxy (NL)")
+    try:
+        page2 = firecrawl_fetch(match["url"], api_key, proxy="enhanced", location=ENHANCED_LOCATION)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        print(f"  retry {match['sku']} @ amazon failed: {exc}")
+        return page, enhanced_failures + 1
+    time.sleep(REQUEST_PAUSE_S)
+    kind2 = parse.amazon_page_kind(page2.get("html") or "", page2.get("metadata") or {}, match["url"])
+    if kind2 == "soft_block":
+        return page2, enhanced_failures + 1
+    requested = parse.asin_from_url(match["url"])
+    got = parse.asin_from_url((page2.get("metadata") or {}).get("url") or "")
+    if requested and got and requested != got:
+        print(f"  note  {match['sku']} @ amazon: requested {requested}, landed on {got}")
+    return page2, enhanced_failures
+
+
 def run_live(conn):
     api_key = os.environ.get("FIRECRAWL_API_KEY")
     if not api_key:
@@ -152,6 +206,7 @@ def run_live(conn):
     if len(matches) > MAX_PAGES_PER_RUN:
         sys.exit(f"budget guard: {len(matches)} matches > MAX_PAGES_PER_RUN={MAX_PAGES_PER_RUN}")
     ok = 0
+    enhanced_failures = 0
     for match in matches:
         try:
             page = direct_fetch(match) or firecrawl_fetch(match["url"], api_key)
@@ -159,6 +214,9 @@ def run_live(conn):
             db.add_snapshot(conn, match["id"], None, None, None, "none", f"fetch error: {exc}")
             print(f"  FAIL  {match['sku']} @ {match['marketplace']}: {exc}")
             continue
+        if match["marketplace"] == "amazon":
+            page, enhanced_failures = retry_amazon_if_soft_blocked(
+                match, page, api_key, enhanced_failures)
         ok += record(conn, match, page)
         time.sleep(REQUEST_PAUSE_S)
     print(f"done: {ok}/{len(matches)} prices recorded")

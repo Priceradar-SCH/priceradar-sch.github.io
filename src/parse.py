@@ -145,6 +145,63 @@ def image_url(page):
     return img or None
 
 
+AMAZON_HOST_RE = re.compile(r"(?:^|\.)amazon\.[a-z.]+$", re.I)
+AMAZON_ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})", re.I)
+
+
+def asin_from_url(url):
+    """ASIN from an amazon.de /dp/ or /gp/product/ URL, else None."""
+    if not url:
+        return None
+    m = AMAZON_ASIN_RE.search(url)
+    return m.group(1).upper() if m else None
+
+
+def _amazon_is_homepage(url):
+    if not url:
+        return False
+    m = re.match(r"https?://([^/]+)(/[^?]*)?", url, re.I)
+    if not m:
+        return False
+    host, path = m.group(1).split(":")[0], (m.group(2) or "/")
+    if not AMAZON_HOST_RE.search(host):
+        return False
+    if AMAZON_ASIN_RE.search(path):
+        return False
+    # "/" or locale roots like "/-/en/" or "/-/de/"
+    return bool(re.match(r"^/(?:-/?\w{2,3}/?)?$", path))
+
+
+def amazon_page_kind(html, meta=None, requested_url=None):
+    """Classify a fetched Amazon page: 'product', 'no_buybox', or 'soft_block'.
+
+    Amazon sometimes answers HTTP 200 with the homepage instead of the product
+    (a soft block). Those pages must not be parsed for a price, because they
+    only carry carousel offers.
+    """
+    meta = meta or {}
+    html = html or ""
+    low = html.lower()
+    if "validatecaptcha" in low or "opfcaptcha" in low or "enter the characters you see" in low:
+        return "soft_block"
+    canonical = ""
+    cm = re.search(r'rel=["\']canonical["\'][^>]*href=["\']([^"\']+)["\']', html, re.I)
+    if not cm:
+        cm = re.search(r'href=["\']([^"\']+)["\'][^>]*rel=["\']canonical["\']', html, re.I)
+    if cm:
+        canonical = cm.group(1)
+    final = meta.get("url") or ""
+    if _amazon_is_homepage(final) or _amazon_is_homepage(canonical):
+        return "soft_block"
+    has_title = bool(re.search(r'id=["\']productTitle["\']', html))
+    has_buybox = "twister-plus-buying-options-price-data" in html
+    if not has_title and not has_buybox:
+        return "soft_block"
+    if has_title and not has_buybox:
+        return "no_buybox"
+    return "product"
+
+
 def extract(page):
     """page: {"metadata": {...}, "html": "..."} (either part may be missing).
     -> {"price", "currency", "available", "source"}
