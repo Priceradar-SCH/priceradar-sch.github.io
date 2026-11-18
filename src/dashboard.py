@@ -192,9 +192,14 @@ select{height:34px;border:1px solid var(--line);background:var(--card);color:var
 .note.a{background:var(--ambs);color:var(--amb)}
 .empty{grid-column:1/-1;text-align:center;color:var(--mut);padding:60px 16px}
 .foot{padding:0 0 36px;font-size:12px;color:var(--mut);line-height:1.5}
-.ov{position:fixed;inset:0;background:rgba(8,8,14,.45);display:none;z-index:20;justify-content:flex-end}
+.ov{position:fixed;inset:0;background:rgba(8,8,14,.45);display:none;z-index:40;justify-content:flex-end}
 .ov.open{display:flex}
-.panel{width:min(880px,100%);height:100%;overflow:auto;background:var(--bg);border-left:1px solid var(--line);padding:24px 28px;box-shadow:-20px 0 60px rgba(0,0,0,.18)}
+.panel{width:min(880px,100%);height:100%;height:100dvh;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;background:var(--bg);border-left:1px solid var(--line);padding:0 0 calc(24px + env(safe-area-inset-bottom,0px));box-shadow:-20px 0 60px rgba(0,0,0,.18)}
+.pbar{position:sticky;top:0;z-index:2;display:flex;justify-content:flex-end;background:var(--bg);padding:calc(12px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-right,0px)) 8px 16px}
+#close{width:44px;height:44px;min-width:44px;padding:0;touch-action:manipulation}
+.pbody{padding:0 28px 8px}
+html.lock,html.lock body{overflow:hidden;overscroll-behavior:none}
+.ph-main{flex:1 1 0;min-width:0}
 .ph{display:flex;gap:16px;align-items:flex-start}
 .ph .img{width:96px;height:96px}
 .ph h2{margin:0;font-size:19px;letter-spacing:-.01em;font-weight:650}
@@ -246,7 +251,11 @@ select{height:34px;border:1px solid var(--line);background:var(--card);color:var
   .kpis{gap:10px}
   .grid{grid-template-columns:minmax(0,1fr)}
   .bar{gap:8px;overflow-x:auto;flex-wrap:nowrap;margin:0 -14px;padding:10px 14px}
-  .panel{padding:18px}
+  .pbody{padding:0 16px 16px}
+  .ph{flex-wrap:wrap;align-items:flex-start}
+  .ph-main{flex:1 1 0;min-width:0}
+  .ph h2{white-space:normal;overflow-wrap:anywhere}
+  .ph > .badge{flex-basis:100%;order:3}
   .cmp{grid-template-columns:repeat(2,1fr)}
 }
 @media print{
@@ -617,15 +626,19 @@ JS = r"""
       return '<span><svg width="18" height="4" aria-hidden="true"><line x1="0" x2="18" y1="2" y2="2" stroke="' + s.color + '" stroke-width="2.4" stroke-dasharray="' + s.dash + '"/></svg>' + esc(s.label) + "</span>";
     }).join("") + '<span><svg width="18" height="4" aria-hidden="true"><line x1="0" x2="18" y1="2" y2="2" stroke="var(--acc)" stroke-width="2.4"/></svg>Mein Shop</span>';
     document.getElementById("panel").innerHTML =
-      '<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button type="button" class="btn ic" id="close" aria-label="Schließen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
-      '<div class="ph"><div class="img">' + img + "</div>" +
-      '<div style="flex:1"><h2>' + esc(p.name) + '</h2><div class="ids num">' + ids + '</div>' +
+      '<div class="pbar"><button type="button" class="btn ic" id="close" aria-label="Schließen"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
+      '<div class="pbody"><div class="ph"><div class="img">' + img + "</div>" +
+      '<div class="ph-main"><h2>' + esc(p.name) + '</h2><div class="ids num">' + ids + '</div>' +
       '<div class="url" style="margin-bottom:8px">' + esc(host) + '</div><div class="links">' + links + "</div></div>" +
       '<span class="badge ' + BADGE[st] + '">' + esc(st) + "</span></div>" +
       '<div class="box"><div class="bh"><b>Preisverlauf · Mein Shop vs. Marktplätze</b><div class="seg" id="dtr">' + ranges + '</div></div>' +
       '<div class="leg">' + legend + '</div><div id="chart"></div></div>' +
-      '<div class="box"><div class="bh"><b>Zuletzt im Vergleich</b><span class="at">Stand ' + esc(DATA.generated) + '</span></div><div class="cmp num">' + cmp + "</div></div>";
-    document.getElementById("ov").classList.add("open");
+      '<div class="box"><div class="bh"><b>Zuletzt im Vergleich</b><span class="at">Stand ' + esc(DATA.generated) + '</span></div><div class="cmp num">' + cmp + "</div></div></div>";
+    var ovEl = document.getElementById("ov");
+    var panelEl = document.getElementById("panel");
+    ovEl.classList.add("open");
+    document.documentElement.classList.add("lock");
+    panelEl.scrollTop = 0;
     document.getElementById("close").focus();
     drawChart(p);
     document.getElementById("dtr").onclick = function (e) {
@@ -671,17 +684,27 @@ JS = r"""
     Array.prototype.forEach.call(e.currentTarget.children, function (x) { x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
     render();
   };
+  var opener = null;
+  function closeD() {
+    var ov = document.getElementById("ov");
+    ov.classList.remove("open");
+    document.documentElement.classList.remove("lock");
+    openSku = null;
+    if (opener && typeof opener.focus === "function") opener.focus();
+  }
   document.getElementById("grid").onclick = function (e) {
     var c = e.target.closest(".card");
-    if (c) openD(c.dataset.sku);
+    if (c) { opener = c; openD(c.dataset.sku); }
   };
   document.getElementById("grid").onkeydown = function (e) {
     var c = e.target.closest(".card");
-    if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openD(c.dataset.sku); }
+    if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); opener = c; openD(c.dataset.sku); }
   };
   var ov = document.getElementById("ov");
-  ov.onclick = function (e) { if (e.target === ov) ov.classList.remove("open"); };
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") ov.classList.remove("open"); });
+  ov.addEventListener("click", function (e) {
+    if (e.target === ov || e.target.closest("#close")) closeD();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeD(); });
 
   var exm = document.getElementById("exm");
   document.getElementById("exb").onclick = function (e) { e.stopPropagation(); exm.classList.toggle("open"); };
@@ -712,7 +735,7 @@ def build():
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Price Radar</title>
 <style>""" + CSS + """</style>
 </head>
